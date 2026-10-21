@@ -141,6 +141,12 @@ describe('parseMassLinks', () => {
       { name: 'Mass during the Day', url: 'https://bible.usccb.org/bible/readings/122525-Day.cfm' },
     ]);
   });
+  it('lists St John the Baptist Masses, whose links have no .cfm', () => {
+    expect(parseMassLinks(fx('john-baptist-2026-06-24'))).toEqual([
+      { name: 'Vigil', url: 'https://bible.usccb.org/bible/readings/062426-Vigil' },
+      { name: 'Mass during the Day', url: 'https://bible.usccb.org/bible/readings/062426-Day' },
+    ]);
+  });
   it('is empty for an ordinary page', () => {
     expect(parseMassLinks(fx('sunday-2026-10-25'))).toEqual([]);
   });
@@ -166,18 +172,62 @@ describe('fetchUsccb', () => {
     expect(new Date(r.fetchedAt).toString()).not.toBe('Invalid Date');
   });
 
-  it('combines every Christmas Mass in page order with Mass-prefixed titles', async () => {
+  it('combines every Christmas Mass in page order, each section naming its Mass, titles verbatim', async () => {
     const r = await fetchUsccb('2025-12-25', fetchText);
     const counts = ['Vigil', 'Night', 'Dawn', 'Day'].map((m) => headingCount(fx(`christmas-2025-12-25-${m}`)));
     expect(r.sections).toHaveLength(counts.reduce((a, b) => a + b, 0));
-    expect(r.sections[0].title).toBe('Vigil Mass · Reading I');
-    expect(r.sections[0].kind).toBe('reading1');
-    const firstNight = r.sections[counts[0]];
-    expect(firstNight.title.startsWith('Mass during the Night · ')).toBe(true);
-    expect(r.sections.at(-1)?.title).toBe('Mass during the Day · Gospel');
+    expect(r.sections[0]).toMatchObject({ mass: 'Vigil Mass', title: 'Reading I', kind: 'reading1' });
+    expect(r.sections[counts[0]].mass).toBe('Mass during the Night');
+    expect(r.sections.at(-1)).toMatchObject({ mass: 'Mass during the Day', title: 'Gospel', kind: 'gospel' });
+    expect(r.sections.every((s) => !s.title.includes(' · '))).toBe(true);
     expect(r.feast).toBe('The Nativity of the Lord (Christmas)');
     expect(r.lectionary).toBe('13, 14, 15, 16');
     expect(r.sourceUrl).toBe('https://bible.usccb.org/bible/readings/122525.cfm');
+  });
+
+  it('leaves mass unset on a single-Mass day', async () => {
+    const r = await fetchUsccb('2026-10-25', fetchText);
+    expect(r.sections.every((s) => !('mass' in s))).toBe(true);
+  });
+
+  it('follows St John the Baptist links without .cfm', async () => {
+    const jb: Record<string, string> = {
+      'https://bible.usccb.org/bible/readings/062426.cfm': fx('john-baptist-2026-06-24'),
+      'https://bible.usccb.org/bible/readings/062426-Vigil': fx('john-baptist-2026-06-24-Vigil'),
+      'https://bible.usccb.org/bible/readings/062426-Day': fx('john-baptist-2026-06-24-Day'),
+    };
+    const r = await fetchUsccb('2026-06-24', async (u) => {
+      if (!(u in jb)) throw new Error(`unexpected ${u}`);
+      return jb[u];
+    });
+    expect([...new Set(r.sections.map((s) => s.mass))]).toEqual(['Vigil', 'Mass during the Day']);
+    expect(r.sections.filter((s) => s.mass === 'Vigil').map((s) => s.kind)).toEqual([
+      'reading1', 'psalm', 'reading2', 'alleluia', 'gospel',
+    ]);
+  });
+
+  it('retries a Mass page up to 3 times with a short backoff', async () => {
+    const sleep = vi.fn(async () => {});
+    const tries: Record<string, number> = {};
+    const flaky = async (u: string) => {
+      tries[u] = (tries[u] ?? 0) + 1;
+      if (u.endsWith('-Night.cfm') && tries[u] < 3) throw new Error('timeout');
+      return fetchText(u);
+    };
+    const r = await fetchUsccb('2025-12-25', flaky, sleep);
+    expect(tries['https://bible.usccb.org/bible/readings/122525-Night.cfm']).toBe(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(r.sections.some((s) => s.mass === 'Mass during the Night')).toBe(true);
+  });
+
+  it('gives up on a Mass page after 3 failed attempts', async () => {
+    const sleep = vi.fn(async () => {});
+    const down = async (u: string) => {
+      if (u.endsWith('-Dawn.cfm')) throw new Error('still down');
+      return fetchText(u);
+    };
+    await expect(fetchUsccb('2025-12-25', down, sleep)).rejects.toThrow('still down');
+    expect(sleep).toHaveBeenCalledTimes(2);
   });
 
   it('throws when a page has neither readings nor Mass links', async () => {

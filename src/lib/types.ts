@@ -14,6 +14,8 @@ export type ReadingKind = 'reading1' | 'psalm' | 'reading2' | 'sequence' | 'alle
 
 export interface ReadingSection {
   kind: ReadingKind;
+  /** On a day of several Masses (Christmas, Vigil and Day), the Mass this section belongs to, as USCCB names it. */
+  mass?: string;
   title: string;
   citation: string;
   text: string;

@@ -106,13 +106,35 @@ export function parseMassLinks(html: string): MassLink[] {
   return links;
 }
 
+const MASS_PAGE_ATTEMPTS = 3;
+const RETRY_BASE_MS = 1000;
+
+const realSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** One Mass page, retried up to 3 times (1s, then 2s apart): a landing day needs every page to succeed. */
+async function fetchMassPage(
+  url: string,
+  fetchText: (url: string) => Promise<string>,
+  sleep: (ms: number) => Promise<void>,
+): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchText(url);
+    } catch (e) {
+      if (attempt >= MASS_PAGE_ATTEMPTS) throw e;
+      await sleep(RETRY_BASE_MS * attempt);
+    }
+  }
+}
+
 /**
  * Fetches and parses a day's readings. When the page is a landing page of several Masses, every Mass page is fetched
- * in page order and the sections are concatenated, each title prefixed with the Mass name.
+ * in page order and the sections are concatenated, each naming its Mass in `mass` (titles stay as published).
  */
 export async function fetchUsccb(
   date: string,
   fetchText: (url: string) => Promise<string> = defaultFetchText,
+  sleep: (ms: number) => Promise<void> = realSleep,
 ): Promise<DailyReadings> {
   const html = await fetchText(usccbUrl(date));
   const parsed = parseUsccb(html, date);
@@ -123,9 +145,9 @@ export async function fetchUsccb(
     if (!masses.length) throw new Error(`USCCB page for ${date} has no readings`);
     sections = [];
     for (const m of masses) {
-      const mass = parseUsccb(await fetchText(m.url), date);
+      const mass = parseUsccb(await fetchMassPage(m.url, fetchText, sleep), date);
       if (!mass.sections.length) throw new Error(`USCCB ${m.name} page for ${date} has no readings`);
-      sections.push(...mass.sections.map((s) => ({ ...s, title: `${m.name} · ${s.title}` })));
+      sections.push(...mass.sections.map((s) => ({ ...s, mass: m.name })));
     }
   }
   return { ...parsed, sections, fetchedAt: new Date().toISOString() };
