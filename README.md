@@ -32,3 +32,18 @@ Theme (`light|dark|auto`) and text size (90% to 150%) are set by `ThemeProvider`
 ## Environment
 
 See `.env.example`. All variables are configured in Vercel.
+
+## Supabase (local)
+
+Schema lives in `supabase/migrations`. The local stack needs Docker:
+
+```bash
+pnpm supabase start -x studio,imgproxy,vector,logflare,edge-runtime,realtime,mailpit
+eval "$(pnpm -s supabase status -o env | grep -E '^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)=')"
+export SUPABASE_TEST_URL=$API_URL SUPABASE_TEST_ANON_KEY=$ANON_KEY SUPABASE_TEST_SERVICE_KEY=$SERVICE_ROLE_KEY
+pnpm vitest run tests/integration   # skipped when SUPABASE_TEST_URL is unset
+pnpm supabase db reset              # re-apply migrations and seed
+```
+
+Production sign-in is Google only. The integration tests create two throwaway email/password users
+through the admin API on the local stack only.
