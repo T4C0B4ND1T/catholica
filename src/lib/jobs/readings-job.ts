@@ -5,6 +5,9 @@ const WINDOW_DAYS = 7;
 const MAX_ATTEMPTS = 3;
 /** Failures for today or tomorrow are urgent enough to email. */
 const URGENT_DAYS = 1;
+/** Waits before the 2nd and 3rd attempts. */
+const BACKOFF_MS = [1000, 3000];
+const DEFAULT_BUDGET_MS = 240_000;
 
 export interface ReadingsJobDeps {
   fetchUsccb: (date: string) => Promise<DailyReadings>;
@@ -16,6 +19,12 @@ export interface ReadingsJobDeps {
   logRun: (job: 'readings' | 'bulletin', status: 'ok' | 'error', message: string) => Promise<void>;
   alert: (subject: string, body: string) => Promise<void>;
   now: Date;
+  /** Pause between fetch attempts (default: real timers). */
+  sleep?: (ms: number) => Promise<void>;
+  /** Monotonic-ish clock in ms (default Date.now), used for the time budget. */
+  clock?: () => number;
+  /** Stop starting new dates after this many ms (default 240s; the route allows 300s). */
+  budgetMs?: number;
 }
 
 function errMessage(e: unknown): string {
@@ -31,15 +40,25 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
   const saved: string[] = [];
   const failed: string[] = [];
   const notes: string[] = [];
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const clock = deps.clock ?? Date.now;
+  const budgetMs = deps.budgetMs ?? DEFAULT_BUDGET_MS;
+  const started = clock();
 
   for (let i = 0; i <= WINDOW_DAYS; i++) {
     const date = addDays(today, i);
+    if (clock() - started > budgetMs) {
+      failed.push(date);
+      notes.push(`readings ${date}: skipped, time budget exceeded`);
+      continue;
+    }
     try {
       let readings = await deps.getReadings(date);
 
       if (!readings) {
         let lastError: unknown;
         for (let attempt = 1; attempt <= MAX_ATTEMPTS && !readings; attempt++) {
+          if (attempt > 1) await sleep(BACKOFF_MS[attempt - 2]);
           try {
             readings = await deps.fetchUsccb(date);
           } catch (e) {

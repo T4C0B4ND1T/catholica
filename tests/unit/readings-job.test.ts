@@ -23,6 +23,7 @@ function setup(over: Partial<ReadingsJobDeps> = {}, stored: string[] = [], refle
     logRun: vi.fn(async () => {}),
     alert: vi.fn(async () => {}),
     now: NOW,
+    sleep: vi.fn(async () => {}),
     ...over,
   } satisfies ReadingsJobDeps;
   return deps;
@@ -124,5 +125,40 @@ describe('runReadingsJob', () => {
     expect(deps.fetchUsccb).not.toHaveBeenCalled();
     expect(deps.saveReflection).toHaveBeenCalledTimes(1);
     expect(deps.saveReflection).toHaveBeenCalledWith('2026-10-21', 'reflection');
+  });
+
+  it('backs off 1s then 3s between attempts', async () => {
+    const deps = setup({
+      fetchUsccb: vi.fn(async (d: string) => {
+        if (d === '2026-10-28') throw new Error('down');
+        return mk(d);
+      }),
+    });
+    await runReadingsJob(deps);
+    expect(vi.mocked(deps.sleep).mock.calls).toEqual([[1000], [3000]]);
+  });
+
+  it('stops starting new dates once the time budget is exceeded', async () => {
+    let t = 0;
+    const deps = setup({
+      clock: () => t,
+      budgetMs: 100,
+      fetchUsccb: vi.fn(async (d: string) => {
+        t += 60;
+        return mk(d);
+      }),
+    });
+    const res = await runReadingsJob(deps);
+    expect(res.saved).toEqual(DATES.slice(0, 2));
+    expect(res.failed).toEqual(DATES.slice(2));
+    expect(deps.fetchUsccb).toHaveBeenCalledTimes(2);
+    expect(deps.alert).not.toHaveBeenCalled();
+  });
+
+  it('starts from the Chicago date when UTC has already rolled over', async () => {
+    const deps = setup({ now: new Date('2026-10-22T03:00:00Z') });
+    await runReadingsJob(deps);
+    expect(vi.mocked(deps.getReadings).mock.calls[0][0]).toBe('2026-10-21');
+    expect(vi.mocked(deps.getReadings).mock.calls).toHaveLength(8);
   });
 });

@@ -1,10 +1,8 @@
 import 'server-only';
 import { GoogleGenAI } from '@google/genai';
 import type { DailyReadings } from '@/lib/types';
+import { geminiModel } from './model';
 
-export function geminiModel(): string {
-  return process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-}
 
 function promptFor(r: DailyReadings): string {
   const body = r.sections.map((s) => `${s.title} (${s.citation})\n${s.text}`).join('\n\n');

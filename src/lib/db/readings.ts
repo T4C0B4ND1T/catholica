@@ -1,31 +1,34 @@
 import 'server-only';
 import type { DailyReadings, ReadingSection } from '@/lib/types';
+import { geminiModel } from '@/lib/ai/model';
 import { liturgicalDay } from '@/lib/liturgical/calendar';
 import { createAdminClient } from './admin';
 import { createServerClient } from './server';
 
+/** The day's readings, or null when none are stored. Throws when the lookup fails. */
+export async function readReadings(date: string): Promise<DailyReadings | null> {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase
+    .from('readings')
+    .select('date, feast, lectionary, sections, source_url, fetched_at')
+    .eq('date', date)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    date: data.date,
+    feast: data.feast ?? '',
+    lectionary: data.lectionary ?? null,
+    sections: (data.sections ?? []) as ReadingSection[],
+    sourceUrl: data.source_url ?? '',
+    fetchedAt: data.fetched_at,
+  };
+}
+
 /** The day's readings, or null when none are stored (or the lookup fails, so pages still render). */
 export async function getReadings(date: string): Promise<DailyReadings | null> {
   try {
-    const supabase = await createServerClient();
-    const { data, error } = await supabase
-      .from('readings')
-      .select('date, feast, lectionary, sections, source_url, fetched_at')
-      .eq('date', date)
-      .maybeSingle();
-    if (error) {
-      console.error('getReadings failed', error.message);
-      return null;
-    }
-    if (!data) return null;
-    return {
-      date: data.date,
-      feast: data.feast ?? '',
-      lectionary: data.lectionary ?? null,
-      sections: (data.sections ?? []) as ReadingSection[],
-      sourceUrl: data.source_url ?? '',
-      fetchedAt: data.fetched_at,
-    };
+    return await readReadings(date);
   } catch (e) {
     console.error('getReadings failed', e instanceof Error ? e.message : e);
     return null;
@@ -54,16 +57,17 @@ export async function saveReadings(r: DailyReadings): Promise<void> {
   if (error) throw new Error(`saveReadings ${r.date}: ${error.message}`);
 }
 
+/** The day's AI reflection, or null when none is stored. Throws when the lookup fails. */
+export async function readReflection(date: string): Promise<string | null> {
+  const supabase = await createServerClient();
+  const { data, error } = await supabase.from('reflections').select('text').eq('date', date).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.text ?? null;
+}
+
 export async function getReflection(date: string): Promise<string | null> {
   try {
-    const { data, error } = await createServerClient().then((s) =>
-      s.from('reflections').select('text').eq('date', date).maybeSingle(),
-    );
-    if (error) {
-      console.error('getReflection failed', error.message);
-      return null;
-    }
-    return data?.text ?? null;
+    return await readReflection(date);
   } catch (e) {
     console.error('getReflection failed', e instanceof Error ? e.message : e);
     return null;
@@ -80,6 +84,6 @@ export async function hasReflection(date: string): Promise<boolean> {
 export async function saveReflection(date: string, text: string, model?: string): Promise<void> {
   const { error } = await createAdminClient()
     .from('reflections')
-    .upsert({ date, text, model: model ?? process.env.GEMINI_MODEL ?? 'gemini-2.5-flash' }, { onConflict: 'date' });
+    .upsert({ date, text, model: model ?? geminiModel() }, { onConflict: 'date' });
   if (error) throw new Error(`saveReflection ${date}: ${error.message}`);
 }
