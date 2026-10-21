@@ -9,6 +9,7 @@ export function useWakeLock(active: boolean): void {
     let cancelled = false;
 
     const acquire = async () => {
+      if (sentinel && !sentinel.released) return;
       try {
         const lock = await navigator.wakeLock.request('screen');
         if (cancelled) void lock.release().catch(() => {});

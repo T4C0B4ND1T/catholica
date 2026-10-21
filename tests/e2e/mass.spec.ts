@@ -67,4 +67,22 @@ test.describe('Mass tab', () => {
     await scrollTo(page, 'homily');
     await expect(badge).toContainText('Sit');
   });
+
+  test.describe('short viewport', () => {
+    test.use({ viewport: { width: 390, height: 360 } });
+
+    test('Creed shows Stand', async ({ page }) => {
+      await page.goto('/mass');
+      await scrollTo(page, 'profession-of-faith');
+      await expect(page.getByTestId('posture-badge')).toContainText('Stand');
+    });
+
+    test('bottom of the page shows the last step posture', async ({ page }) => {
+      await page.goto('/mass');
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      const last = await page.locator('[data-step]').last().getAttribute('data-posture');
+      expect(last).toBe('kneel');
+      await expect(page.getByTestId('posture-badge')).toContainText('Kneel');
+    });
+  });
 });

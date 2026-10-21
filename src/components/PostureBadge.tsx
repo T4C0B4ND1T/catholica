@@ -1,7 +1,7 @@
 'use client';
 
 import { Armchair, ChevronDown, Cross, HandHeart, PersonStanding, type LucideIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { MassPosture } from '@/data/order-of-mass';
 
 const POSTURES: Record<MassPosture, { label: string; Icon: LucideIcon }> = {
@@ -16,32 +16,44 @@ const POSTURES: Record<MassPosture, { label: string; Icon: LucideIcon }> = {
 export function PostureBadge({ initial }: { initial: MassPosture }) {
   const [posture, setPosture] = useState<MassPosture>(initial);
 
+  const badgeRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const steps = Array.from(document.querySelectorAll<HTMLElement>('[data-step]'));
-    const inBand = new Set<HTMLElement>();
-    // Band just below the sticky badge; the topmost step inside it is the current one.
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) inBand.add(e.target as HTMLElement);
-          else inBand.delete(e.target as HTMLElement);
-        }
-        const current = steps.find((s) => inBand.has(s));
-        const next = current?.dataset.posture as MassPosture | undefined;
-        if (next && next in POSTURES) setPosture(next);
-      },
-      { rootMargin: '-140px 0px -65% 0px' },
-    );
-    steps.forEach((s) => io.observe(s));
-    return () => io.disconnect();
+    let frame = 0;
+
+    // Current step: the last one whose top is at or above a line just below the sticky badge;
+    // at the very bottom of the page, the last step.
+    const update = () => {
+      frame = 0;
+      const line = (badgeRef.current?.getBoundingClientRect().bottom ?? 0) + 48;
+      const atBottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      let current = steps[0];
+      if (atBottom) current = steps[steps.length - 1];
+      else for (const s of steps) if (s.getBoundingClientRect().top <= line) current = s;
+      const next = current?.dataset.posture as MassPosture | undefined;
+      if (next && next in POSTURES) setPosture(next);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, []);
 
   const { label, Icon } = POSTURES[posture];
   return (
-    <div className="sticky top-0 z-30 -mx-4 border-b border-border bg-background px-4 py-3">
+    <div ref={badgeRef} className="sticky top-0 z-30 -mx-4 border-b border-border bg-background px-4 py-3">
       <div className="flex items-center justify-center gap-3" data-testid="posture-badge">
         <Icon size={32} strokeWidth={1.5} className="text-accent" aria-hidden="true" />
-        <span className="font-display text-2xl leading-none" aria-live="polite">
+        <span className="font-display text-2xl leading-none">
           <span className="sr-only">Current posture: </span>
           {label}
         </span>

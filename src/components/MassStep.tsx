@@ -35,7 +35,7 @@ export function MassStep({ step, readings }: { step: MassStepData; readings: Dai
       data-step
       data-posture={step.posture}
       aria-labelledby={`${step.id}-title`}
-      className="scroll-mt-32 border-b border-border py-6 last:border-b-0"
+      className="scroll-mt-24 border-b border-border py-6 last:border-b-0"
     >
       <h3 id={`${step.id}-title`} className="font-display text-xl leading-snug">
         {step.title}
