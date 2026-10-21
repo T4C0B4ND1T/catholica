@@ -36,3 +36,20 @@ export async function fetchText(url: string): Promise<string> {
 export async function fetchBytes(url: string): Promise<Uint8Array> {
   return new Uint8Array(await (await get(url)).arrayBuffer());
 }
+
+/** POST a form body and return the response text. */
+export async function postForm(url: string, form: Record<string, string>): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'User-Agent': USER_AGENT, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(form).toString(),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (e) {
+    throw new SourceError(`POST ${url} failed: ${e instanceof Error ? e.message : String(e)}`, 0);
+  }
+  if (!res.ok) throw new SourceError(`POST ${url} returned ${res.status}`, res.status);
+  return res.text();
+}

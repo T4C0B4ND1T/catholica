@@ -1,3 +1,4 @@
+import { Catechism } from "@/components/me/Catechism";
 import { Bookmarks } from "@/components/me/Bookmarks";
 import { Intentions } from "@/components/me/Intentions";
 import { Notes } from "@/components/me/Notes";
@@ -37,6 +38,7 @@ export default async function MePage() {
         ) : (
           <SignedOut />
         )}
+        <Catechism signedIn={signedIn} />
         <SettingsPanel signedIn={signedIn} />
       </div>
     </>

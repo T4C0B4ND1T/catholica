@@ -29,3 +29,23 @@ export async function writeReflection(r: DailyReadings): Promise<string> {
   if (!text) throw new Error('Gemini returned no text');
   return text;
 }
+
+/** AI answer to a Catechism question. Shown only under an "AI answer" label, never as Catechism text. */
+export async function askCatechism(question: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = [
+    'Answer the question below for a Catholic reader, based on the Catechism of the Catholic Church.',
+    'Rules: at most 150 words, plain language, no headings or lists.',
+    'Cite the relevant paragraph numbers in the form CCC 1324 (for several, write CCC 1324 and CCC 1325 separately).',
+    'Do not quote the Catechism or Scripture word for word; paraphrase. Only cite paragraphs you are confident exist.',
+    'If the question is not about Catholic teaching, say so briefly.',
+    '',
+    `Question: ${question}`,
+  ].join('\n');
+  const res = await ai.models.generateContent({ model: geminiModel(), contents: prompt });
+  const text = res.text?.trim();
+  if (!text) throw new Error('Gemini returned no text');
+  return text;
+}
