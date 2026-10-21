@@ -59,10 +59,14 @@ export function SettingsPanel({ signedIn }: { signedIn: boolean }) {
   const percent = Math.round(textScale * 100);
 
   async function signOut() {
-    await createBrowserClient().auth.signOut();
-    await clearPersonalCache();
-    await forgetSavedMePage().catch(() => {});
-    window.location.reload();
+    try {
+      await createBrowserClient().auth.signOut();
+    } finally {
+      // Even when sign-out fails (no signal), this phone forgets the personal data and the saved Me page.
+      await clearPersonalCache();
+      await forgetSavedMePage().catch(() => {});
+      window.location.reload();
+    }
   }
 
   return (
