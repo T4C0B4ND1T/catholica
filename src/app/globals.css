@@ -17,6 +17,11 @@
   --shadow-md: 0 4px 12px rgb(26 26 26 / 0.06);
   --shadow-lg: 0 8px 24px rgb(26 26 26 / 0.08);
   --noise-opacity: 0.3;
+  --lit-violet: #6B3FA0;
+  --lit-rose: #D98BA6;
+  --lit-white: #FFFFFF;
+  --lit-red: #B3261E;
+  --lit-green: #3F7D4E;
 }
 
 /* Explicit dark (set by ThemeProvider / pre-paint script). */
@@ -36,6 +41,11 @@
   --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
   --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.4);
   --noise-opacity: 0;
+  --lit-violet: #A98BD6;
+  --lit-rose: #E7A9BE;
+  --lit-white: #F2EFEA;
+  --lit-red: #E26B63;
+  --lit-green: #6FB27F;
 }
 
 /* Auto: follow the system unless the user forced light. */
@@ -56,6 +66,11 @@
     --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
     --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.4);
     --noise-opacity: 0;
+    --lit-violet: #A98BD6;
+    --lit-rose: #E7A9BE;
+    --lit-white: #F2EFEA;
+    --lit-red: #E26B63;
+    --lit-green: #6FB27F;
   }
 }
 
@@ -71,6 +86,11 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent-muted: var(--accent-muted);
   --color-ring: var(--ring);
+  --color-lit-violet: var(--lit-violet);
+  --color-lit-rose: var(--lit-rose);
+  --color-lit-white: var(--lit-white);
+  --color-lit-red: var(--lit-red);
+  --color-lit-green: var(--lit-green);
   --font-display: var(--font-playfair), Georgia, serif;
   --font-sans: var(--font-source-sans), system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;

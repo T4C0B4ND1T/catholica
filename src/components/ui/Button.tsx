@@ -14,8 +14,13 @@ const variants: Record<ButtonVariant, string> = {
     "text-muted-foreground underline-offset-4 decoration-accent hover:text-foreground hover:underline",
 };
 
+/** Button styling for elements that are not <button>, such as links. */
+export function buttonClasses(variant: ButtonVariant = "primary", className = ""): string {
+  return `${base} ${variants[variant]} ${className}`;
+}
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant };
 
 export function Button({ variant = "primary", className = "", type = "button", ...props }: ButtonProps) {
-  return <button type={type} className={`${base} ${variants[variant]} ${className}`} {...props} />;
+  return <button type={type} className={buttonClasses(variant, className)} {...props} />;
 }
