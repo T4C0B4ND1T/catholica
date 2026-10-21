@@ -2,7 +2,7 @@
 
 Copied from the controller's working ledger so a later session can resume. Tasks marked complete are done and merged or in an open PR; do not redo them.
 
-Remaining plan tasks: 4 (USCCB readings), 5 (readings cron + reflection), 6 (bulletin), 8 (Today screen; must wire BookmarkButton into ReadingCard), 10 (Bulletin tab), 12 (Catechism), 13 (offline service worker), 14 (deploy + verify). Tasks 4, 6, 12 and 14 need network access to bible.usccb.org, stanselmparish.org, files.ecatholic.com and www.catholiccrossreference.online, so run them in an environment that allows those hosts.
+Remaining plan tasks: 4 (USCCB parser + fixtures + seed.sql; also add src/app/api/cron/readings/route.ts wiring runReadingsJob), 6 (bulletin write side, job, cron route, backfill), 12 (Catechism lookup + AI Q&A), 14 (provision production Supabase, Vercel env vars, deploy, verify on a phone). All others are done in PR #1 and PR #2. Tasks 4, 6, 12 and 14 need network access to bible.usccb.org, stanselmparish.org, files.ecatholic.com and www.catholiccrossreference.online.
 
 Task 9 already added ReadingKind/ReadingSection/DailyReadings to src/lib/types.ts and getReadings() to src/lib/db/readings.ts; Task 4 adds saveReadings and the parser and must not redefine them.
 
@@ -92,3 +92,42 @@ Task 11 fix round 1: dispatched to a66844a5c33a644d7
 Task 11: fix round 1/5 (371ba27); scoped re-review dispatched
 Task 11: minor (deferred): poison-pill attempt counter in memory (resets on reload); authBlocked only cleared by successful pull; stale pull after clearPersonalCache can recreate store; midnight rollover; brittle note selector; rate label gate; signed-in 360px/44px e2e.
 Task 11: complete (commits e3ea577..371ba27, re-review clean)
+- Ruling: continue network-free work in order 5 → 10 → 8 → 13 while source hosts stay blocked; Task 5 builds the job/reflection/alerts/readings API and vercel.json, but the cron route's live wiring to fetchUsccb moves to Task 4 (Task 5's route file imports fetchUsccb only once Task 4 exists) — parser needs real fixtures — cost if wrong: one route file moves between tasks.
+- Ruling: Task 10 adds the bulletins read side (listBulletins, latestBulletin, searchBulletins in src/lib/db/bulletins.ts) with exact Task 6 signatures; Task 6 adds the write side and job. E2e for 8/10 seed synthetic rows via service role and skip without SUPABASE_TEST_* (as Task 9).
+Task 5: BASE 7d7d8cb, implementer dispatched
+Task 5: implemented cbc359f (DONE_WITH_CONCERNS: gemini/resend/db helpers untested without keys). NOTE for Task 4: add src/app/api/cron/readings/route.ts — assertCron(req) from src/lib/jobs/cron-auth.ts, maxDuration=300, runReadingsJob({fetchUsccb,getReadings,saveReadings,saveReflection,hasReflection,writeReflection,logRun,alert:sendAlert,now:new Date()}).
+Task 5: review dispatched (7d7d8cb..cbc359f)
+Task 5 review: spec PASS; I1 readings API caches null/error for 1h publicly. Minors: no backoff/time budget (360s > 300 maxDuration), === compare, duplicated model default, extreme dates, Chicago boundary test, test asserts, error redaction.
+Ruling: fix I1 + time budget/backoff + year clamp + model default + Chicago-boundary test in round 1; timingSafeEqual, redaction, extra asserts deferred.
+Task 5 fix round 1: dispatched to a32aa7d27cfdb5e6d
+Task 5: fix round 1/5 (a2e12a1); ruling: lookup error → 503 no-store is fine (SW falls back to cache). Re-review dispatched.
+Controller: 44b-ish vercel.json framework=nextjs pinned after Joel hit Vercel 404 NOT_FOUND (can't inspect project: connector 404/403).
+Task 5: minor (deferred): timingSafeEqual; error redaction; alert subject/body asserts; no test for urgent date skipped by budget.
+Task 5: complete (commits 7d7d8cb..a2e12a1, re-review clean)
+Task 10: BASE e4d1722, implementer dispatched (adds Bulletin type + read side listBulletins/latestBulletin/searchBulletins + getBulletinPdf in src/lib/db/bulletins.ts; Task 6 adds hasBulletin/saveBulletin/job)
+Task 10: implemented 4a56270 (DONE_WITH_CONCERNS: 503 vs 404 without DB; serial describe; extra getBulletin/BulletinSearch/bulletin-text). Review dispatched.
+Task 10: review PASS (minors deferred: 400 vs 404 malformed date; storage missing-object regex; 300ms blank; search hidden in empty state; ts_headline before limit; nosniff).
+Task 10: complete (commits e4d1722..4a56270)
+Task 8: BASE 4a56270, implementer dispatched
+- Ruling (Task 8): usccbUrl lives in src/lib/sources/usccb-url.ts (pure, built on usccbSlug); Task 4's usccb.ts imports/re-exports it. E2e seeds synthetic readings/reflection/bulletin rows via service role (seed.sql from real fixtures stays with Task 4). — cost if wrong: one import path.
+Task 8: implemented 17e5f27 (DONE_WITH_CONCERNS: primary Button white-on-gold AA; --lit-* colors chosen; SpeakButton untested). Review dispatched.
+Task 8 review: I1 server ReadingCard imports SECTION_LABELS from a client module; I2 white lit rule invisible on light bg; I3 SpeakButton unmount cancels another's speech. Minors listed in review.
+- Ruling: page reading the DB directly (not via /api/readings) is correct — spec says screens never call USCCB; the API is for offline/client use (Task 13).
+Ruling: round 1 fixes I1–I3 + duplicate keys, aria pattern, pagehide cancel, voiceschanged, DB-error copy, 360px test, Sunday-card Mon/Sat boundary test. Calendar grid keyboard nav deferred.
+Task 8 fix round 1: dispatched to a7054aabf88a526ae
+Task 8: fix round 1/5 (1a24796); re-review dispatched
+Task 8: minor (deferred): MonthCalendar grid keyboard nav; SpeakButton stale owner on empty chunks; This Sunday card sparse when no data; Follow-the-Mass gold button contrast (final review).
+Task 8: complete (commits 4a56270..1a24796, re-review clean)
+Task 13: BASE 1a24796, implementer dispatched
+CI fix (controller): today.spec unseeded-date assertion depends on DB presence.
+Task 13: implemented 0d43175 (DONE_WITH_CONCERNS: prefetch adds /mass?date and bulletin viewer; no cache trimming; This Sunday absent offline). Review dispatched (a81ba1b..0d43175).
+Task 13 review: spec PASS; I1 3s timeout falls back to / shell while online; I2 unbounded cache (iOS eviction risks IndexedDB outbox); I3 offline /mass?date outside week shows wrong day's readings via ignoreSearch. Minors: sign-out leaves cached /me; latestBulletin not React cache(); 3 date validators; SWR null-first; e2e gaps.
+Ruling: round 1 fixes I1–I3 + sign-out cache delete + cache() on latestBulletin + TODAY computed per test; validator dedupe and SWR-null deferred.
+Task 13 fix round 1: dispatched to ab05d5c416a7b76e9
+Task 13: fix round 1/5 (08b08a6). Ruling: /?date= offline falling back to / shell is OK because TodayOffline re-renders the requested date from cache or shows not-saved (no wrong-day scripture). Re-review dispatched.
+Task 13: minor (deferred): pre-hydration flash of shell day on /?date= offline; beforeAll TODAY per worker; 3 date validators; SWR null-first.
+Task 13: complete (commits a81ba1b..08b08a6, re-review clean)
+All network-free tasks done (1,2,3,5,7,8,9,10,11,13). Remaining: 4,6,12,14 need source hosts. Running whole-branch review of PR #2 range e3ea577..HEAD.
+Final review: merge after fixes — C1 stale bare /mass offline; I2 gold AA tokens; I3 static cache growth; minors 5,6,8 included. Ruling: 4 (crons 404 until Tasks 4/6) noted in PR body; 7, 9 deferred. Final fix dispatched.
+Final fix: 8d84b67, 6a410d6, 1b7302d. Scoped re-review dispatched.
+Final fix re-review: all addressed; static pruning concern judged safe (no dynamic imports). PR #2 ready.
