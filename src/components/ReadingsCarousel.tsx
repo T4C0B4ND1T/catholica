@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { SECTION_LABELS } from "@/components/BookmarkButton";
+import { SECTION_LABELS } from "@/lib/section-labels";
 import type { ReadingKind } from "@/lib/types";
 
 /** Horizontal scroll-snap cards (children, one per section) with a pill row that jumps to a card. */
@@ -37,7 +37,7 @@ export function ReadingsCarousel({ kinds, children }: { kinds: ReadingKind[]; ch
       <nav aria-label="Readings" className="mb-4 flex flex-wrap justify-center gap-2">
         {kinds.map((kind, i) => (
           <button
-            key={kind}
+            key={i}
             type="button"
             onClick={() => jump(i)}
             aria-current={i === active ? "true" : undefined}

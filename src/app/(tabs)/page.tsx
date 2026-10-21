@@ -7,12 +7,13 @@ import { SourceFooter } from "@/components/SourceFooter";
 import { ThisSundayCard } from "@/components/ThisSundayCard";
 import { Card } from "@/components/ui/Card";
 import { buttonClasses } from "@/components/ui/Button";
-import { addDays, dayOfWeek, todayInChicago } from "@/lib/dates";
+import { addDays, todayInChicago } from "@/lib/dates";
 import { latestBulletin } from "@/lib/db/bulletins";
-import { getReadings, getReflection } from "@/lib/db/readings";
+import { getReadings, getReflection, readReadings } from "@/lib/db/readings";
+import { showsThisSunday } from "@/lib/this-sunday";
 import { comingSunday, liturgicalDay } from "@/lib/liturgical/calendar";
 import { usccbUrl } from "@/lib/sources/usccb-url";
-import type { Bulletin, LitColor, Season } from "@/lib/types";
+import type { Bulletin, DailyReadings, LitColor, Season } from "@/lib/types";
 
 const SEASONS: Record<Season, string> = {
   advent: "Advent",
@@ -56,14 +57,21 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const today = todayInChicago();
   const date = validDate((await searchParams).date) ?? today;
   const day = liturgicalDay(date);
-  const sunday = dayOfWeek(date) === 0 ? null : comingSunday(date);
+  const sunday = showsThisSunday(date) ? comingSunday(date) : null;
 
-  const [readings, reflection, sundayReadings, bulletin] = await Promise.all([
-    getReadings(date),
+  const [lookup, reflection, sundayReadings, bulletin] = await Promise.all([
+    readReadings(date).then(
+      (r): { readings: DailyReadings | null; failed: boolean } => ({ readings: r, failed: false }),
+      (e) => {
+        console.error("readReadings failed", e instanceof Error ? e.message : e);
+        return { readings: null, failed: true };
+      },
+    ),
     getReflection(date),
     sunday ? getReadings(sunday) : Promise.resolve(null),
     sunday ? safeLatestBulletin() : Promise.resolve(null),
   ]);
+  const { readings, failed: loadFailed } = lookup;
   const sections = readings?.sections ?? [];
 
   return (
@@ -88,12 +96,12 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
       {readings && sections.length > 0 ? (
         <ReadingsCarousel kinds={sections.map((s) => s.kind)}>
           {sections.map((s, i) => (
-            <ReadingCard key={`${s.kind}-${i}`} date={date} section={s} />
+            <ReadingCard key={i} date={date} section={s} index={i} />
           ))}
         </ReadingsCarousel>
       ) : (
         <Card data-testid="no-readings" className="text-center">
-          <p>Readings for this day aren&apos;t saved yet.</p>
+          <p>{loadFailed ? "Couldn't load the readings right now." : "Readings for this day aren't saved yet."}</p>
           <a
             href={usccbUrl(date)}
             className="mt-2 inline-flex min-h-11 items-center underline underline-offset-4"

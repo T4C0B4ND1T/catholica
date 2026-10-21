@@ -10,6 +10,7 @@ const seeded = Boolean(url && serviceKey);
 // Other specs use 2099-01-04 and a 2099 bulletin, so these dates avoid theirs.
 const SUNDAY = '2099-02-01';
 const WEDNESDAY = '2099-01-28';
+const TWINS = '2099-02-08'; // a Sunday with two sections of the same kind
 const BULLETIN = '2098-01-04'; // older than any other spec's bulletin so it never changes their "latest"
 const SOURCE = 'https://example.invalid/synthetic-readings';
 
@@ -38,6 +39,15 @@ test.describe('Today tab', () => {
         feast: 'Synthetic Test Wednesday',
         sections: [{ kind: 'gospel', title: 'Gospel', citation: 'Test 9:9', text: 'SYNTHETIC WEEKDAY GOSPEL (not scripture)' }],
       },
+      {
+        ...base,
+        date: TWINS,
+        feast: 'Synthetic Twin Sunday',
+        sections: [
+          { kind: 'other', title: 'Option One', citation: 'Test 7:1', text: 'SYNTHETIC OPTION ONE TEXT' },
+          { kind: 'other', title: 'Option Two', citation: 'Test 7:2', text: 'SYNTHETIC OPTION TWO TEXT' },
+        ],
+      },
     ]);
     if (rows.error) throw rows.error;
     const reflection = await admin
@@ -53,8 +63,40 @@ test.describe('Today tab', () => {
   test.afterAll(async () => {
     if (!admin) return;
     await admin.from('reflections').delete().eq('date', SUNDAY);
-    await admin.from('readings').delete().in('date', [SUNDAY, WEDNESDAY]);
+    await admin.from('readings').delete().in('date', [SUNDAY, WEDNESDAY, TWINS]);
     await admin.from('bulletins').delete().eq('sunday_date', BULLETIN);
+  });
+
+  test.describe('360px', () => {
+    test.use({ viewport: { width: 360, height: 780 } });
+
+    test('no page overflow and the Gospel pill brings its card into view', async ({ page }) => {
+      test.skip(!seeded, 'needs SUPABASE_TEST_URL and SUPABASE_TEST_SERVICE_KEY');
+      await page.goto(`/?date=${SUNDAY}`);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+      await page.getByRole('navigation', { name: 'Readings' }).getByRole('button', { name: 'Gospel' }).click();
+      const gospel = page.locator('[data-card="gospel"]');
+      await expect
+        .poll(async () => {
+          const box = (await gospel.boundingBox())!;
+          return box.x >= 0 && box.x + box.width <= 360;
+        })
+        .toBe(true);
+    });
+  });
+
+  test('two sections of the same kind get distinct cards and pills', async ({ page }) => {
+    test.skip(!seeded, 'needs SUPABASE_TEST_URL and SUPABASE_TEST_SERVICE_KEY');
+    await page.goto(`/?date=${TWINS}`);
+    await expect(page.locator('[data-card="other"]')).toHaveCount(2);
+    const ids = await page.locator('[data-card]').evaluateAll((els) => els.map((e) => e.id));
+    expect(new Set(ids).size).toBe(2);
+    const pills = page.getByRole('navigation', { name: 'Readings' }).getByRole('button');
+    await expect(pills).toHaveCount(2);
+    await pills.nth(1).click();
+    await expect(pills.nth(1)).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator('[data-card="other"]').nth(1)).toContainText('SYNTHETIC OPTION TWO TEXT');
   });
 
   for (const scheme of ['light', 'dark'] as const) {

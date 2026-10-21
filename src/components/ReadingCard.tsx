@@ -1,16 +1,17 @@
-import { BookmarkButton, SECTION_LABELS } from "@/components/BookmarkButton";
+import { BookmarkButton } from "@/components/BookmarkButton";
+import { SECTION_LABELS } from "@/lib/section-labels";
 import { SpeakButton } from "@/components/SpeakButton";
 import { Card } from "@/components/ui/Card";
 import type { ReadingSection } from "@/lib/types";
 
 /** One saved reading. Text comes only from the saved section; AI text never appears here. */
-export function ReadingCard({ date, section }: { date: string; section: ReadingSection }) {
+export function ReadingCard({ date, section, index }: { date: string; section: ReadingSection; index: number }) {
   const label = SECTION_LABELS[section.kind];
   const featured = section.kind === "gospel";
   return (
     <Card
       featured={featured}
-      id={`card-${section.kind}`}
+      id={`card-${index}`}
       data-card={section.kind}
       role="group"
       aria-label={label}
@@ -27,7 +28,7 @@ export function ReadingCard({ date, section }: { date: string; section: ReadingS
           {section.citation && <p className="small-caps mt-1 text-muted-foreground">{section.citation}</p>}
         </div>
         <div className="-mr-2 -mt-1 flex shrink-0">
-          <SpeakButton label={label} text={`${section.title}. ${section.text}`} />
+          <SpeakButton label={section.title || label} text={`${section.title}. ${section.text}`} />
           <BookmarkButton date={date} section={section.kind} />
         </div>
       </div>

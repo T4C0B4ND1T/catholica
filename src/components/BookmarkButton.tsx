@@ -2,6 +2,7 @@
 
 import { Bookmark } from "lucide-react";
 import type { ReadingKind } from "@/lib/types";
+import { SECTION_LABELS } from "@/lib/section-labels";
 import { usePersonal } from "@/lib/offline/use-personal";
 
 export interface BookmarkRow {
@@ -9,16 +10,6 @@ export interface BookmarkRow {
   date: string;
   section: ReadingKind;
 }
-
-export const SECTION_LABELS: Record<ReadingKind, string> = {
-  reading1: "First Reading",
-  psalm: "Responsorial Psalm",
-  reading2: "Second Reading",
-  sequence: "Sequence",
-  alleluia: "Alleluia",
-  gospel: "Gospel",
-  other: "Reading",
-};
 
 export function BookmarkButton({ date, section }: { date: string; section: ReadingKind }) {
   const { rows, upsert, remove, signedIn } = usePersonal<BookmarkRow>("bookmarks");

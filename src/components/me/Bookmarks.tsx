@@ -4,7 +4,8 @@ import Link from "next/link";
 import { Trash2 } from "lucide-react";
 import { formatDay } from "@/lib/dates";
 import { usePersonal } from "@/lib/offline/use-personal";
-import { SECTION_LABELS, type BookmarkRow } from "@/components/BookmarkButton";
+import { type BookmarkRow } from "@/components/BookmarkButton";
+import { SECTION_LABELS } from "@/lib/section-labels";
 import { IconButton } from "@/components/ui/IconButton";
 
 export function Bookmarks() {
