@@ -1,4 +1,4 @@
-import { get, update } from 'idb-keyval';
+import { del, get, update } from 'idb-keyval';
 
 export type Collection = 'notes' | 'bookmarks' | 'intentions' | 'routines' | 'routine_ticks';
 
@@ -32,6 +32,9 @@ export function createOutbox(key = 'catholica.outbox') {
   return {
     async enqueue(op: OutboxOp): Promise<void> {
       await update<OutboxOp[]>(key, (q) => [...(q ?? []), op]);
+    },
+    async clear(): Promise<void> {
+      await del(key);
     },
     async size(): Promise<number> {
       return ((await get<OutboxOp[]>(key)) ?? []).length;

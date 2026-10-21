@@ -15,6 +15,13 @@ const COLUMNS: Record<Collection, string> = {
   routine_ticks: 'id, routine_id, date',
 };
 
+// Same-day writes from another device share a natural key: last edit wins instead of conflicting.
+const CONFLICT_TARGET: Partial<Record<Collection, string>> = {
+  notes: 'user_id,date',
+  bookmarks: 'user_id,date,section',
+  routine_ticks: 'routine_id,date',
+};
+
 type Ctx = { params: Promise<{ collection: string }> };
 
 function json(body: unknown, status = 200): Response {
@@ -75,7 +82,7 @@ export function POST(req: Request, ctx: Ctx) {
     if (!row) return json({ error: 'invalid row' }, 400);
     const { error } = await db
       .from(collection)
-      .upsert({ ...row, user_id: userId, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      .upsert({ ...row, user_id: userId, updated_at: new Date().toISOString() }, { onConflict: CONFLICT_TARGET[collection] ?? 'id' });
     if (error) {
       if (error.code === '23505') return json({ error: 'conflict' }, 409);
       // Constraint or RLS rejection: retrying cannot help. Anything else may be transient.

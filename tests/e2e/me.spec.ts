@@ -10,6 +10,7 @@ const seeded = Boolean(url && anonKey && serviceKey);
 // Must match ALLOWED_EMAIL in playwright.config.ts.
 const EMAIL = 'me-e2e@catholica.test';
 const PASSWORD = 'me-e2e-password-123';
+const OTHER_EMAIL = 'me-e2e-other@catholica.test';
 
 test.describe('Me tab, signed out', () => {
   test('settings work and synced sections are disabled', async ({ page }) => {
@@ -46,6 +47,7 @@ test.describe('Me tab, signed in', () => {
 
   let admin: SupabaseClient;
   let userId: string;
+  let otherId: string;
   let cookies: { name: string; value: string }[] = [];
 
   async function userRows(table: string) {
@@ -58,15 +60,16 @@ test.describe('Me tab, signed in', () => {
     if (!seeded) return;
     const opts = { auth: { persistSession: false, autoRefreshToken: false } };
     admin = createClient(url!, serviceKey!, opts);
-    const created = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true });
-    if (created.error) {
+    async function ensureUser(email: string): Promise<string> {
+      const created = await admin.auth.admin.createUser({ email, password: PASSWORD, email_confirm: true });
+      if (!created.error) return created.data.user.id;
       const list = await admin.auth.admin.listUsers({ perPage: 200 });
-      const found = list.data.users.find((u) => u.email === EMAIL);
+      const found = list.data.users.find((u) => u.email === email);
       if (!found) throw created.error;
-      userId = found.id;
-    } else {
-      userId = created.data.user.id;
+      return found.id;
     }
+    userId = await ensureUser(EMAIL);
+    otherId = await ensureUser(OTHER_EMAIL);
 
     // Sign in through Supabase and capture the @supabase/ssr session cookies.
     const jar = new Map<string, string>();
@@ -92,6 +95,7 @@ test.describe('Me tab, signed in', () => {
 
   test.afterAll(async () => {
     if (seeded && userId) await admin.auth.admin.deleteUser(userId);
+    if (seeded && otherId) await admin.auth.admin.deleteUser(otherId);
   });
 
   test('default routines exist and a ticked Angelus survives reload', async ({ page }) => {
@@ -164,5 +168,66 @@ test.describe('Me tab, signed in', () => {
     } finally {
       await admin.from('readings').delete().eq('date', date);
     }
+  });
+
+  test('same-day note written elsewhere is overwritten, not rejected', async ({ context }) => {
+    const date = '2099-02-02';
+    const post = (id: string, body: string) =>
+      context.request.post('/api/me/notes', { data: { id, date, body } });
+    expect((await post(crypto.randomUUID(), 'first device')).status()).toBe(200);
+    expect((await post(crypto.randomUUID(), 'second device')).status()).toBe(200);
+    const rows = (await userRows('notes')).filter((n) => n.date === date);
+    expect(rows.map((n) => n.body)).toEqual(['second device']);
+  });
+
+  test.describe('api security', () => {
+    const rid = () => crypto.randomUUID();
+
+    test('unauthenticated requests get 401', async ({ playwright }) => {
+      const anon = await playwright.request.newContext({ baseURL: 'http://localhost:3000' });
+      expect((await anon.get('/api/me/notes')).status()).toBe(401);
+      expect((await anon.post('/api/me/notes', { data: { id: rid(), date: '2099-01-01', body: 'x' } })).status()).toBe(401);
+      expect((await anon.delete(`/api/me/notes?id=${rid()}`)).status()).toBe(401);
+      await anon.dispose();
+    });
+
+    test('unknown collection is 404', async ({ context }) => {
+      expect((await context.request.get('/api/me/profiles')).status()).toBe(404);
+    });
+
+    test('a forged user_id is stored under the caller', async ({ context }) => {
+      const id = rid();
+      const res = await context.request.post('/api/me/intentions', {
+        data: { id, text: 'forged', user_id: otherId },
+      });
+      expect(res.status()).toBe(200);
+      const { data } = await admin.from('intentions').select('user_id').eq('id', id).single();
+      expect(data?.user_id).toBe(userId);
+    });
+
+    test("another user's row cannot be overwritten or deleted", async ({ context }) => {
+      const id = rid();
+      const { error } = await admin
+        .from('intentions')
+        .insert({ id, user_id: otherId, text: 'private to other' });
+      expect(error).toBeNull();
+      const post = await context.request.post('/api/me/intentions', { data: { id, text: 'hijacked' } });
+      expect(post.ok()).toBe(false);
+      await context.request.delete(`/api/me/intentions?id=${id}`);
+      const { data } = await admin.from('intentions').select('user_id, text').eq('id', id).single();
+      expect(data).toEqual({ user_id: otherId, text: 'private to other' });
+      await admin.from('intentions').delete().eq('id', id);
+    });
+
+    test("a tick for another user's routine is rejected", async ({ context }) => {
+      const routineId = rid();
+      await admin.from('routines').insert({ id: routineId, user_id: otherId, name: 'Other', sort_order: 0 });
+      const res = await context.request.post('/api/me/routine_ticks', {
+        data: { id: rid(), routine_id: routineId, date: '2099-01-01' },
+      });
+      expect(res.ok()).toBe(false);
+      const { data } = await admin.from('routine_ticks').select('id').eq('routine_id', routineId);
+      expect(data).toEqual([]);
+    });
   });
 });

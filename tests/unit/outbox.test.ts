@@ -41,4 +41,35 @@ describe('outbox', () => {
     expect(sent).toBe(2);
     expect(seen).toEqual(['a', 'b']);
   });
+
+  it('sends each op exactly once when flushes overlap', async () => {
+    const box = createOutbox(fresh());
+    for (const id of ['1', '2', '3']) await box.enqueue(op(id));
+    const seen: string[] = [];
+    const send = async (o: OutboxOp) => {
+      await new Promise((r) => setTimeout(r, 5));
+      seen.push(String(o.row.id));
+    };
+    const [a, b] = await Promise.all([box.flush(send), box.flush(send)]);
+    expect(a + b).toBe(3);
+    expect(seen).toEqual(['1', '2', '3']);
+  });
+
+  it('keeps unsent ops for a new instance after a failed flush', async () => {
+    const key = fresh();
+    const box = createOutbox(key);
+    await box.enqueue(op('1'));
+    await box.enqueue(op('2'));
+    expect(await box.flush(async () => Promise.reject(new Error('offline')))).toBe(0);
+    const seen: string[] = [];
+    expect(await createOutbox(key).flush(async (o) => void seen.push(String(o.row.id)))).toBe(2);
+    expect(seen).toEqual(['1', '2']);
+  });
+
+  it('clear empties the queue', async () => {
+    const box = createOutbox(fresh());
+    await box.enqueue(op('1'));
+    await box.clear();
+    expect(await box.size()).toBe(0);
+  });
 });
