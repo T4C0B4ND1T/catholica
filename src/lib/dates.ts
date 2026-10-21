@@ -33,3 +33,14 @@ export function usccbSlug(date: string): string {
   const [y, m, d] = date.split('-');
   return `${m}${d}${y.slice(2)}`;
 }
+
+/** '2026-10-25' -> 'Sun, Oct 25, 2026'. */
+export function formatDay(date: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(parse(date)));
+}

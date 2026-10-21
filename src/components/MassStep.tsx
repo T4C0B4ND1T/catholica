@@ -1,5 +1,6 @@
 import { readingSlotFor, type MassDialogueLine, type MassStepData } from '@/data/order-of-mass';
 import type { DailyReadings } from '@/lib/types';
+import { BookmarkButton } from '@/components/BookmarkButton';
 
 const SPEAKERS: Record<MassDialogueLine['speaker'], string> = {
   priest: 'Priest',
@@ -42,10 +43,13 @@ export function MassStep({ step, readings }: { step: MassStepData; readings: Dai
       </h3>
       {section ? (
         <div className="mt-3" data-testid={`reading-${slot}`}>
-          <p className="small-caps text-sm text-muted-foreground">
-            {section.title}
-            {section.citation && <> · {section.citation}</>}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="small-caps text-sm text-muted-foreground">
+              {section.title}
+              {section.citation && <> · {section.citation}</>}
+            </p>
+            {slot && readings && <BookmarkButton date={readings.date} section={slot} />}
+          </div>
           <p className="mt-2 whitespace-pre-line leading-relaxed">{section.text}</p>
           <p className="mt-3 text-xs text-muted-foreground">
             NABRE ·{' '}
