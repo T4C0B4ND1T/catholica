@@ -17,11 +17,14 @@ function oneLine(s: string): string {
 }
 
 /** Maps a heading such as "Reading II" or "Verse Before the Gospel" to a kind; anything unrecognised is 'other'. */
-function kindOf(title: string): ReadingKind {
+function kindOf(title: string, multiReading: boolean): ReadingKind {
   const t = title.toLowerCase();
   if (/^reading\s+(1|i)$/.test(t)) return 'reading1';
   if (t.startsWith('responsorial psalm')) return 'psalm';
-  if (/^reading\s+(2|ii)$/.test(t) || t === 'epistle') return 'reading2';
+  // On a vigil with Reading III or later (or an Epistle), "Reading II" is just one of many Old Testament readings;
+  // only the Epistle is the second reading.
+  if (t === 'epistle') return 'reading2';
+  if (/^reading\s+(2|ii)$/.test(t)) return multiReading ? 'other' : 'reading2';
   if (t.startsWith('sequence')) return 'sequence';
   if (t.startsWith('alleluia') || t.startsWith('verse before the gospel')) return 'alleluia';
   if (t === 'gospel') return 'gospel';
@@ -58,14 +61,21 @@ export function parseUsccb(html: string, date: string): Omit<DailyReadings, 'fet
   const feast = oneLine(lect.find('h2').first().text());
   const lectionary = /Lectionary:\s*(.+)/.exec(oneLine(lect.find('p').first().text()))?.[1].trim() ?? null;
 
+  const titles = $('.b-verse h3.name')
+    .map((_, h) => oneLine($(h).text()).toLowerCase())
+    .get();
+  const multiReading = titles.some((t) => t === 'epistle' || /^reading\s+(3|4|5|6|7|iii|iv|v|vi|vii)$/.test(t));
+
   const sections: ReadingSection[] = [];
   $('.b-verse').each((_, block) => {
     const b = $(block);
     const title = oneLine(b.find('h3.name').first().text());
     if (!title) return;
     const text = bodyText($, b.find('.content-body').first() as cheerio.Cheerio<never>);
-    if (!text) return;
-    sections.push({ kind: kindOf(title), title, citation: oneLine(b.find('.address').first().text()), text });
+    if (!text) throw new Error(`USCCB page for ${date}: "${title}" has an empty body`);
+    // "Or" offers an alternative to the section before it, so it takes that section's kind.
+    const kind = /^or$/i.test(title) ? (sections.at(-1)?.kind ?? 'other') : kindOf(title, multiReading);
+    sections.push({ kind, title, citation: oneLine(b.find('.address').first().text()), text });
   });
 
   return { date, feast, lectionary, sections, sourceUrl: usccbUrl(date) };
@@ -78,7 +88,9 @@ export function parseMassLinks(html: string): MassLink[] {
   $('ul.nested a.item').each((_, a) => {
     const href = $(a).attr('href');
     const name = oneLine($(a).text());
-    if (href && name) links.push({ name, url: new URL(href, 'https://bible.usccb.org').toString() });
+    if (!href || !name) return;
+    const url = new URL(href, 'https://bible.usccb.org');
+    if (url.origin === 'https://bible.usccb.org') links.push({ name, url: url.toString() });
   });
   return links;
 }

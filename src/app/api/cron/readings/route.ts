@@ -12,10 +12,10 @@ export async function GET(req: Request): Promise<Response> {
   const denied = assertCron(req);
   if (denied) return denied;
   const result = await runReadingsJob({
-    fetchUsccb: (date) => fetchUsccb(date),
+    fetchUsccb,
     getReadings,
     saveReadings,
-    saveReflection: (date, text) => saveReflection(date, text),
+    saveReflection,
     hasReflection,
     writeReflection,
     logRun,

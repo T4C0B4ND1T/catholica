@@ -42,7 +42,21 @@ describe('parseUsccb', () => {
     expect(titles.slice(0, 3)).toEqual(['Reading I', 'Or', 'Responsorial Psalm']);
     expect(titles.at(-1)).toBe('Gospel');
     expect(r.sections.find((s) => s.title === 'Epistle')?.kind).toBe('reading2');
-    expect(r.sections[1].kind).toBe('other');
+  });
+
+  it('maps the Easter Vigil kinds: only the Epistle is reading2, alternates follow the section before', () => {
+    const r = parseUsccb(fx('easter-vigil-2026-04-04'), '2026-04-04');
+    const reading2 = r.sections.filter((s) => s.kind === 'reading2');
+    expect(reading2.map((s) => s.title)).toEqual(['Epistle']);
+    expect(r.sections.find((s) => s.title === 'Reading II')?.kind).toBe('other');
+    expect(r.sections[0].kind).toBe('reading1');
+    expect(r.sections[1]).toMatchObject({ title: 'Or', kind: 'reading1' });
+    expect(r.sections[3]).toMatchObject({ title: 'or', kind: 'psalm' });
+  });
+
+  it('throws on a block with a title but an empty body', () => {
+    const html = '<div class="b-verse"><h3 class="name">Gospel</h3><div class="address">Mt 1</div><div class="content-body"><p>&nbsp;</p></div></div>';
+    expect(() => parseUsccb(html, '2026-10-25')).toThrow(/empty body/);
   });
 
   it('cleans every section: no tags, no nbsp, psalm line breaks kept as newlines', () => {
