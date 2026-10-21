@@ -24,5 +24,14 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
+    // Point the app at the same Supabase the tests seed, when one is provided.
+    env: {
+      ...(process.env.SUPABASE_TEST_URL && process.env.SUPABASE_TEST_ANON_KEY
+        ? {
+            NEXT_PUBLIC_SUPABASE_URL: process.env.SUPABASE_TEST_URL,
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.SUPABASE_TEST_ANON_KEY,
+          }
+        : {}),
+    },
   },
 });

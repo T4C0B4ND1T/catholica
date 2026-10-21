@@ -9,3 +9,21 @@ export interface LiturgicalDay {
   weekdayCycle: 'I' | 'II';
   isSunday: boolean;
 }
+
+export type ReadingKind = 'reading1' | 'psalm' | 'reading2' | 'sequence' | 'alleluia' | 'gospel' | 'other';
+
+export interface ReadingSection {
+  kind: ReadingKind;
+  title: string;
+  citation: string;
+  text: string;
+}
+
+export interface DailyReadings {
+  date: string;
+  feast: string;
+  lectionary: string | null;
+  sections: ReadingSection[];
+  sourceUrl: string;
+  fetchedAt: string;
+}
