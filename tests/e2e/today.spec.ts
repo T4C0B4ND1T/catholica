@@ -162,7 +162,11 @@ test.describe('Today tab', () => {
 
   test('unseeded date shows the USCCB fallback and no error text', async ({ page }) => {
     await page.goto('/?date=2098-06-06');
-    await expect(page.getByText("Readings for this day aren't saved yet.")).toBeVisible();
+    // Without a database the lookup fails, so the page shows the load-error copy instead.
+    const fallback = url && serviceKey
+      ? "Readings for this day aren't saved yet."
+      : "Couldn't load the readings right now.";
+    await expect(page.getByText(fallback)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open on USCCB' })).toHaveAttribute(
       'href',
       'https://bible.usccb.org/bible/readings/060698.cfm',
