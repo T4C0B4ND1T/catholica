@@ -43,17 +43,19 @@ function systemTheme(): "light" | "dark" {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<ThemePreference>("auto");
-  const [textScale, setTextScaleState] = useState(1);
-
-  // Load saved preferences once on mount.
-  useEffect(() => {
+  // Initialise from storage (same source as the pre-paint script) so the first
+  // effect run agrees with what is already on <html>. The provider renders no
+  // theme-dependent markup, so differing server/client initial state is harmless.
+  const [theme, setThemeState] = useState<ThemePreference>(() => {
+    if (typeof window === "undefined") return "auto";
     const t = read(THEME_KEY);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from localStorage after mount
-    setThemeState(t === "light" || t === "dark" ? t : "auto");
+    return t === "light" || t === "dark" ? t : "auto";
+  });
+  const [textScale, setTextScaleState] = useState(() => {
+    if (typeof window === "undefined") return 1;
     const s = parseFloat(read(TEXT_SCALE_KEY) ?? "");
-    if (Number.isFinite(s)) setTextScaleState(clampScale(s));
-  }, []);
+    return Number.isFinite(s) ? clampScale(s) : 1;
+  });
 
   // Reflect the theme on <html>; in auto mode track the system setting.
   useEffect(() => {
