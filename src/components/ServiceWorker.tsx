@@ -29,6 +29,7 @@ export function ServiceWorker({ bulletinDate }: { bulletinDate: string | null })
         registration.active?.postMessage({
           type: "prefetch",
           urls: offlineUrls(todayInChicago(), bulletinDate),
+          bulletinDate,
           assets: loadedAssets(),
         });
       })

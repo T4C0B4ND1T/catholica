@@ -1,5 +1,15 @@
 import { addDays } from '@/lib/dates';
 
+/** The service worker's cache. Keep in step with `CACHE` in public/sw.js. */
+export const OFFLINE_CACHE = 'catholica-v1';
+
+/** Forgets the saved Me page, so a signed-out phone never shows the signed-in one offline. */
+export async function forgetSavedMePage(): Promise<void> {
+  if (typeof caches === 'undefined') return;
+  const cache = await caches.open(OFFLINE_CACHE);
+  await cache.delete('/me', { ignoreSearch: true });
+}
+
 /** Days of readings kept for offline use, starting today. */
 export const OFFLINE_DAYS = 7;
 

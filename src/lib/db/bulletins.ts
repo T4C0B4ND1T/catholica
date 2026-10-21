@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import type { Bulletin } from '@/lib/types';
 import { createAdminClient } from './admin';
 import { createServerClient } from './server';
@@ -33,8 +34,8 @@ export async function listBulletins(): Promise<Bulletin[]> {
   return (data ?? []).map(toBulletin);
 }
 
-/** The newest saved bulletin, or null when none exist. Throws when the lookup fails. */
-export async function latestBulletin(): Promise<Bulletin | null> {
+/** The newest saved bulletin, or null when none exist. Throws when the lookup fails. One query per request. */
+export const latestBulletin = cache(async function latestBulletin(): Promise<Bulletin | null> {
   const supabase = await createServerClient();
   const { data, error } = await supabase
     .from('bulletins')
@@ -44,7 +45,7 @@ export async function latestBulletin(): Promise<Bulletin | null> {
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data ? toBulletin(data) : null;
-}
+});
 
 /** One bulletin by Sunday date, or null. Throws when the lookup fails. */
 export async function getBulletin(date: string): Promise<Bulletin | null> {

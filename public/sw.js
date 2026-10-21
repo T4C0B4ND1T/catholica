@@ -1,5 +1,5 @@
 /* Catholica service worker: keeps the coming week readable with no signal. */
-/* global self, caches, fetch, URL */
+/* global self, caches, fetch, Response, URL */
 
 // Bump to drop every cached response on the next activation.
 const CACHE = 'catholica-v1';
@@ -58,32 +58,74 @@ function todayInChicago() {
   }).format(new Date());
 }
 
-/** Offline fallbacks for a page: the exact URL, then for a bare `/mass` today's Mass, then the same page for
- * another date, then the `/` shell (the Today page re-renders itself from cached readings). */
-async function cachedPage(url) {
-  const candidates = [url.href];
-  if (url.pathname === '/mass' && !url.searchParams.has('date')) candidates.push(`/mass?date=${todayInChicago()}`);
-  candidates.push(url.pathname);
-  for (const key of candidates) {
-    const hit = await match(key);
-    if (hit) return hit;
+/** MMDDYY, as in USCCB reading URLs. */
+function usccbUrl(date) {
+  const [y, m, d] = date.split('-');
+  return `https://bible.usccb.org/bible/readings/${m}${d}${y.slice(2)}.cfm`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+
+/** A plain page for a Mass date with nothing saved: never another day's scripture. */
+function notSavedPage(date) {
+  const href = escapeHtml(usccbUrl(date));
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Catholica</title></head>
+<body style="font-family: system-ui, sans-serif; max-width: 34em; margin: 0 auto; padding: 32px 16px; line-height: 1.6; text-align: center">
+<h1 style="font-family: Georgia, serif; font-weight: normal">Order of the Mass</h1>
+<p data-testid="no-readings">Not saved for offline. Connect to load, or <a href="${href}" style="display: inline-flex; min-height: 44px; align-items: center">open USCCB</a>.</p>
+<p><a href="/" style="display: inline-flex; min-height: 44px; align-items: center">Back to Today</a></p>
+</body></html>`;
+  return new Response(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+
+/**
+ * The page to show when the network is unreachable.
+ * - Exact URL first, always.
+ * - `/mass?date=X`: nothing else (another day's Mass would show the wrong scripture), so a plain "not saved" page.
+ *   Bare `/mass` means today: `/mass?date=<today>`, else the same "not saved" page.
+ * - Anything else, including `/?date=X`: the `/` shell. The Today page then re-renders itself from the cached
+ *   `/api/readings/X`, or says "Not saved for offline", so it never shows another day either.
+ */
+async function offlinePage(url) {
+  const exact = await match(url.href);
+  if (exact) return exact;
+  if (url.pathname === '/mass') {
+    const date = url.searchParams.get('date') || todayInChicago();
+    if (!url.searchParams.has('date')) {
+      const today = await match(`/mass?date=${date}`);
+      if (today) return today;
+    }
+    return notSavedPage(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayInChicago());
   }
-  return (await match(url.pathname, { ignoreSearch: true })) || (await match('/'));
+  if (url.pathname !== '/') {
+    const samePage = await match(url.pathname, { ignoreSearch: true });
+    if (samePage) return samePage;
+  }
+  return match('/');
 }
 
-function timeout(ms) {
-  return new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms));
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Network first; after 3 seconds or on failure, the cached page. The network answer still refreshes the cache. */
+/**
+ * Network first. After 3 seconds an exact cached copy is shown; with none, it keeps waiting for the network, so a
+ * slow connection never swaps in a different page. Broader fallbacks only when the fetch actually fails.
+ * The network answer still refreshes the cache.
+ */
 async function page(event, url) {
   const network = fetch(event.request);
   event.waitUntil(network.then((res) => store(event.request, res.clone(), true)).catch(() => {}));
+  const slow = delay(NAV_TIMEOUT_MS).then(() => 'slow');
   try {
-    return await Promise.race([network, timeout(NAV_TIMEOUT_MS)]);
+    const first = await Promise.race([network, slow]);
+    if (first !== 'slow') return first;
+    const exact = await match(url.href);
+    return exact || (await network);
   } catch {
-    const cached = await cachedPage(url);
-    return cached || network;
+    return (await offlinePage(url)) || Response.error();
   }
 }
 
@@ -156,6 +198,36 @@ async function prefetchOne(path) {
   await store(url.href, res, isPage);
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const READINGS_DATE = /^\/api\/readings\/([^/]+)$/;
+const BULLETIN_DATE = /^\/(?:bulletin|api\/bulletins)\/([^/]+?)(?:\/pdf)?$/;
+
+/** The day a dated entry is for, or undefined for entries that are not about one day. */
+function entryDate(url) {
+  const reading = READINGS_DATE.exec(url.pathname);
+  if (reading) return reading[1];
+  if ((url.pathname === '/' || url.pathname === '/mass') && url.searchParams.has('date')) return url.searchParams.get('date');
+  return undefined;
+}
+
+/**
+ * Keeps the cache small, so storage pressure never makes the phone wipe the site's data (and with it the unsynced
+ * personal outbox). Drops readings and Today/Mass pages for days before today, and every bulletin page or PDF but the
+ * newest one. Static files are left to the cache-name bump.
+ */
+async function prune(bulletinDate) {
+  const today = todayInChicago();
+  const cache = await caches.open(CACHE);
+  for (const req of await cache.keys()) {
+    const url = new URL(req.url);
+    const date = entryDate(url);
+    let drop = date !== undefined && (!ISO_DATE.test(date) || date < today);
+    const bulletin = bulletinDate ? BULLETIN_DATE.exec(url.pathname) : null;
+    if (bulletin && bulletin[1] !== bulletinDate) drop = true;
+    if (drop) await cache.delete(req);
+  }
+}
+
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type !== 'prefetch') return;
@@ -164,6 +236,9 @@ self.addEventListener('message', (event) => {
   event.waitUntil(
     (async () => {
       await Promise.all([saveStatic(assets), ...urls.map((u) => prefetchOne(u).catch(() => {}))]);
+      // Without a known newest bulletin (none saved, or the lookup failed), bulletin entries are left alone.
+      const bulletinDate = typeof data.bulletinDate === 'string' && ISO_DATE.test(data.bulletinDate) ? data.bulletinDate : null;
+      await prune(bulletinDate).catch(() => {});
       if (event.source) event.source.postMessage({ type: 'prefetch-done' });
     })(),
   );

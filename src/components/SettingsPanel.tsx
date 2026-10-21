@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { clearPersonalCache } from "@/lib/offline/use-personal";
+import { forgetSavedMePage } from "@/lib/offline/offline-urls";
 import { createBrowserClient } from "@/lib/db/browser";
 import {
   MAX_RATE,
@@ -60,6 +61,7 @@ export function SettingsPanel({ signedIn }: { signedIn: boolean }) {
   async function signOut() {
     await createBrowserClient().auth.signOut();
     await clearPersonalCache();
+    await forgetSavedMePage().catch(() => {});
     window.location.reload();
   }
 

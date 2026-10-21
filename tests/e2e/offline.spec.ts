@@ -9,9 +9,10 @@ const seeded = Boolean(url && serviceKey);
 
 // The service worker prefetches the real coming week, so these rows sit on the real current Chicago dates
 // (other specs use 2098/2099). Only dates with no row yet are inserted, and only those are deleted afterwards.
-const TODAY = todayInChicago();
-const WEEK = Array.from({ length: 7 }, (_, i) => addDays(TODAY, i));
-const UNCACHED = addDays(TODAY, 30);
+// Set in beforeAll, so a run that crosses midnight uses one consistent "today" from setup on.
+let TODAY = '';
+let WEEK: string[] = [];
+let UNCACHED = '';
 const CACHE = 'catholica-v1';
 
 const synthetic = (date: string) => ({
@@ -65,6 +66,9 @@ test.describe('Offline', () => {
   const days = new Map<string, Day>();
 
   test.beforeAll(async () => {
+    TODAY = todayInChicago();
+    WEEK = Array.from({ length: 7 }, (_, i) => addDays(TODAY, i));
+    UNCACHED = addDays(TODAY, 30);
     if (!seeded) return;
     admin = createClient(url!, serviceKey!, { auth: { persistSession: false, autoRefreshToken: false } });
     const existing = await admin.from('readings').select('date').in('date', WEEK);
@@ -156,6 +160,68 @@ test.describe('Offline', () => {
     await expect(page.getByText(days.get(TODAY)!.gospel)).toBeVisible();
     await expect(page.getByText(days.get(other)!.gospel)).toHaveCount(0);
     expect(errors).toEqual([]);
+  });
+
+  test('a slow connection waits for the real page instead of showing another one', async ({ page, context }) => {
+    await page.goto('/');
+    await waitForPrefetch(page);
+    // /me was never saved. Its response takes longer than the worker's 3-second timeout.
+    await context.route('**/me', async (route) => {
+      await new Promise((r) => setTimeout(r, 4500));
+      await route.continue();
+    });
+    await page.goto('/me', { timeout: 20_000 });
+    await expect(page.getByRole('heading', { level: 1, name: 'Me' })).toBeAttached();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Follow the Mass' })).toHaveCount(0);
+  });
+
+  test('an unsaved Mass date offline says so instead of showing another day', async ({ page, context }) => {
+    await page.goto('/');
+    await waitForPrefetch(page);
+    await goOffline(context);
+    await page.goto(`/mass?date=${UNCACHED}`);
+    await expect(page.getByText('Not saved for offline. Connect to load, or open USCCB.', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'open USCCB' })).toHaveAttribute('href', usccbUrl(UNCACHED));
+    await expect(page.getByText(days.get(TODAY)!.gospel)).toHaveCount(0);
+  });
+
+  test('after a prefetch, past days and older bulletins are dropped from the cache', async ({ page }) => {
+    await page.goto('/');
+    await waitForPrefetch(page);
+    const past = addDays(TODAY, -1);
+    const newest = '2000-02-06';
+    const old = '2000-01-30';
+    const planted = [
+      `/api/readings/${past}`,
+      `/?date=${past}`,
+      `/mass?date=${past}`,
+      `/bulletin/${old}`,
+      `/api/bulletins/${old}/pdf`,
+      `/bulletin/${newest}`,
+      `/api/bulletins/${newest}/pdf`,
+    ];
+    const keys = await page.evaluate(
+      async ({ cacheName, paths, bulletinDate }) => {
+        const cache = await caches.open(cacheName);
+        await Promise.all(paths.map((p) => cache.put(p, new Response('planted'))));
+        const reg = await navigator.serviceWorker.ready;
+        const done = new Promise<void>((resolve) =>
+          navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && resolve()),
+        );
+        reg.active!.postMessage({ type: 'prefetch', urls: [], assets: [], bulletinDate });
+        await done;
+        return (await cache.keys()).map((r) => {
+          const u = new URL(r.url);
+          return u.pathname + u.search;
+        });
+      },
+      { cacheName: CACHE, paths: planted, bulletinDate: newest },
+    );
+    for (const gone of planted.slice(0, 5)) expect(keys).not.toContain(gone);
+    expect(keys).toEqual(expect.arrayContaining([`/bulletin/${newest}`, `/api/bulletins/${newest}/pdf`]));
+    // This week's entries stay.
+    expect(keys).toEqual(expect.arrayContaining([`/api/readings/${TODAY}`, `/mass?date=${TODAY}`, '/']));
   });
 
   test('personal and auth requests are never cached', async ({ page }) => {
