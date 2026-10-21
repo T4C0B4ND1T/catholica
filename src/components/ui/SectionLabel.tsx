@@ -2,7 +2,7 @@ export function SectionLabel({ children, className = "" }: { children: React.Rea
   return (
     <div className={`mb-6 flex items-center gap-4 ${className}`}>
       <span className="h-px flex-1 bg-border" aria-hidden="true" />
-      <span className="small-caps text-accent">{children}</span>
+      <span className="small-caps text-accent-ink">{children}</span>
       <span className="h-px flex-1 bg-border" aria-hidden="true" />
     </div>
   );

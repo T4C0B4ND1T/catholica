@@ -19,7 +19,7 @@ export function DateChip({ date, today }: { date: string; today: string }) {
         aria-haspopup="dialog"
         className="small-caps inline-flex min-h-11 touch-manipulation items-center gap-2 rounded-md px-3 text-foreground transition-colors duration-200 ease-out hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <CalendarDays size={18} strokeWidth={1.5} aria-hidden="true" className="text-accent" />
+        <CalendarDays size={18} strokeWidth={1.5} aria-hidden="true" className="text-accent-ink" />
         <span>{formatDay(date)}</span>
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Choose a day">

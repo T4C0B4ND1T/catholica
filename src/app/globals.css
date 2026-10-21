@@ -10,7 +10,9 @@
   --border: #E8E4DF;
   --accent: #B8860B;
   --accent-secondary: #D4A84B;
-  --accent-foreground: #FFFFFF;
+  --accent-foreground: #1A1A1A;
+  /* Gold for text and icons on light surfaces: --accent itself is under 4.5:1 there. */
+  --accent-ink: #8A6508;
   --ring: #B8860B;
   --accent-muted: rgb(184 134 11 / 0.06);
   --shadow-sm: 0 1px 2px rgb(26 26 26 / 0.04);
@@ -35,6 +37,7 @@
   --accent: #D4A84B;
   --accent-secondary: #E2BE6E;
   --accent-foreground: #161513;
+  --accent-ink: #D4A84B;
   --ring: #D4A84B;
   --accent-muted: rgb(212 168 75 / 0.08);
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
@@ -60,6 +63,7 @@
     --accent: #D4A84B;
     --accent-secondary: #E2BE6E;
     --accent-foreground: #161513;
+    --accent-ink: #D4A84B;
     --ring: #D4A84B;
     --accent-muted: rgb(212 168 75 / 0.08);
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
@@ -84,6 +88,7 @@
   --color-accent: var(--accent);
   --color-accent-secondary: var(--accent-secondary);
   --color-accent-foreground: var(--accent-foreground);
+  --color-accent-ink: var(--accent-ink);
   --color-accent-muted: var(--accent-muted);
   --color-ring: var(--ring);
   --color-lit-violet: var(--lit-violet);

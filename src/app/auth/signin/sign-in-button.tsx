@@ -13,7 +13,7 @@ export function SignInButton() {
     <button
       type="button"
       onClick={signIn}
-      className="min-h-11 rounded-md bg-accent px-4 text-background"
+      className="min-h-11 rounded-md bg-accent px-4 text-accent-foreground"
     >
       Sign in with Google
     </button>

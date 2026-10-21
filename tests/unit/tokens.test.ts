@@ -13,6 +13,8 @@ const light = {
   border: "#E8E4DF",
   accent: "#B8860B",
   "accent-secondary": "#D4A84B",
+  "accent-foreground": "#1A1A1A",
+  "accent-ink": "#8A6508",
 };
 const dark = {
   background: "#161513",
@@ -23,6 +25,8 @@ const dark = {
   border: "#34302B",
   accent: "#D4A84B",
   "accent-secondary": "#E2BE6E",
+  "accent-foreground": "#161513",
+  "accent-ink": "#D4A84B",
 };
 
 /** Body of the first rule whose selector line matches `selector`. */

@@ -111,10 +111,10 @@ export function SpeakButton({ text, label }: { text: string; label: string }) {
       aria-label={`Listen to ${label}`}
       aria-pressed={speaking}
       onClick={speaking ? stop : start}
-      className="inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 ease-out hover:bg-muted hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 ease-out hover:bg-muted hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {speaking ? (
-        <Square aria-hidden="true" className="size-5 fill-accent text-accent" />
+        <Square aria-hidden="true" className="size-5 fill-accent-ink text-accent-ink" />
       ) : (
         <Volume2 aria-hidden="true" className="size-5" />
       )}

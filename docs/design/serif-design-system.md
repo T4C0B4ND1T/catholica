@@ -170,7 +170,8 @@ If it were music, it would be:
 | `muted-foreground` | `#6B6B6B` | Secondary text. Warm gray with softness. |
 | `accent` | `#B8860B` | Burnished gold. Links, highlights, key interactive elements. |
 | `accent-secondary` | `#D4A84B` | Lighter gold for gradients and hover states. |
-| `accent-foreground` | `#FFFFFF` | Text on accent backgrounds. |
+| `accent-foreground` | `#1A1A1A` | Text on accent backgrounds (dark on gold: white on gold is under 4.5:1). |
+| `accent-ink` | `#8A6508` | Gold for text and icons on light surfaces (5:1 on `background`). Dark mode uses `#D4A84B`. |
 | `border` | `#E8E4DF` | Warm gray for rules, dividers, card borders. |
 | `card` | `#FFFFFF` | Card surfaces. Pure white for maximum lift from ivory background. |
 | `ring` | `#B8860B` | Focus rings. Matches accent gold. |

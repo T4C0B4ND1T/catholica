@@ -9,7 +9,7 @@ const variants: Record<ButtonVariant, string> = {
   primary:
     "bg-accent text-accent-foreground shadow-sm hover:bg-accent-secondary hover:shadow-md",
   outline:
-    "border border-foreground text-foreground hover:bg-muted hover:border-accent hover:text-accent",
+    "border border-foreground text-foreground hover:bg-muted hover:border-accent hover:text-accent-ink",
   ghost:
     "text-muted-foreground underline-offset-4 decoration-accent hover:text-foreground hover:underline",
 };

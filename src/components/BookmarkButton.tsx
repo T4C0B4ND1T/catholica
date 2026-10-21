@@ -29,9 +29,9 @@ export function BookmarkButton({ date, section }: { date: string; section: Readi
       onClick={() =>
         existing ? remove(existing.id) : upsert({ id: crypto.randomUUID(), date, section })
       }
-      className="inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 ease-out hover:bg-muted hover:text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
+      className="inline-flex size-11 shrink-0 touch-manipulation items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 ease-out hover:bg-muted hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50"
     >
-      <Bookmark aria-hidden="true" className={pressed ? "size-5 fill-accent text-accent" : "size-5"} />
+      <Bookmark aria-hidden="true" className={pressed ? "size-5 fill-accent-ink text-accent-ink" : "size-5"} />
     </button>
   );
 }
