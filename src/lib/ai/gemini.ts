@@ -5,7 +5,7 @@ import { geminiModel } from './model';
 
 
 function promptFor(r: DailyReadings): string {
-  const body = r.sections.map((s) => `${s.title} (${s.citation})\n${s.text}`).join('\n\n');
+  const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
   return [
     'Write a short reflection on the Mass readings below for a Catholic reader.',
     'Rules: 150 to 220 words. Speak to the reader in the second person. Use plain language.',

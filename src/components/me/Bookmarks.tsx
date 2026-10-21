@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 import { formatDay } from "@/lib/dates";
 import { usePersonal } from "@/lib/offline/use-personal";
 import { type BookmarkRow } from "@/components/BookmarkButton";
-import { SECTION_LABELS } from "@/lib/section-labels";
+import { bookmarkLabel } from "@/lib/mass-options";
 import { IconButton } from "@/components/ui/IconButton";
 
 export function Bookmarks() {
@@ -28,10 +28,10 @@ export function Bookmarks() {
               className="flex min-h-11 min-w-0 flex-1 flex-col justify-center py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
               <span>{formatDay(b.date)}</span>
-              <span className="text-sm text-muted-foreground">{SECTION_LABELS[b.section] ?? b.section}</span>
+              <span className="text-sm text-muted-foreground">{bookmarkLabel(b.section)}</span>
             </Link>
             <IconButton
-              label={`Remove bookmark ${formatDay(b.date)} ${SECTION_LABELS[b.section] ?? b.section}`}
+              label={`Remove bookmark ${formatDay(b.date)} ${bookmarkLabel(b.section)}`}
               onClick={() => remove(b.id)}
             >
               <Trash2 className="size-5" aria-hidden="true" />

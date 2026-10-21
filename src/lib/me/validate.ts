@@ -1,5 +1,6 @@
 import type { Collection } from '@/lib/offline/outbox';
 import { addDays } from '@/lib/dates';
+import { isBookmarkSection } from '@/lib/mass-options';
 
 export const COLLECTIONS: readonly Collection[] = ['notes', 'bookmarks', 'intentions', 'routines', 'routine_ticks'];
 
@@ -8,7 +9,6 @@ export function isCollection(value: string): value is Collection {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SECTIONS = ['reading1', 'psalm', 'reading2', 'sequence', 'alleluia', 'gospel', 'other'];
 
 export const isUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v);
 
@@ -40,7 +40,7 @@ export function pickRow(collection: Collection, body: unknown): Record<string, u
         ? { id, date: b.date, body: b.body }
         : null;
     case 'bookmarks':
-      return isDate(b.date) && typeof b.section === 'string' && SECTIONS.includes(b.section)
+      return isDate(b.date) && typeof b.section === 'string' && isBookmarkSection(b.section)
         ? { id, date: b.date, section: b.section }
         : null;
     case 'intentions': {

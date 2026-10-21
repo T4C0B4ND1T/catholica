@@ -11,6 +11,7 @@ const seeded = Boolean(url && serviceKey);
 const SUNDAY = '2099-02-01';
 const WEDNESDAY = '2099-01-28';
 const TWINS = '2099-02-08'; // a Sunday with two sections of the same kind
+const MASSES = '2099-02-15'; // a day of two Masses, like Christmas
 const BULLETIN = '2098-01-04'; // older than any other spec's bulletin so it never changes their "latest"
 const SOURCE = 'https://example.invalid/synthetic-readings';
 
@@ -41,6 +42,17 @@ test.describe('Today tab', () => {
       },
       {
         ...base,
+        date: MASSES,
+        feast: 'Synthetic Two-Mass Day',
+        sections: [
+          { mass: 'Vigil Mass', kind: 'reading1', title: 'Reading I', citation: 'Test 8:1', text: 'SYNTHETIC VIGIL FIRST READING' },
+          { mass: 'Vigil Mass', kind: 'gospel', title: 'Gospel', citation: 'Test 8:2', text: 'SYNTHETIC VIGIL GOSPEL' },
+          { mass: 'Mass during the Day', kind: 'reading1', title: 'Reading I', citation: 'Test 8:3', text: 'SYNTHETIC DAY FIRST READING' },
+          { mass: 'Mass during the Day', kind: 'gospel', title: 'Gospel', citation: 'Test 8:4', text: 'SYNTHETIC DAY GOSPEL' },
+        ],
+      },
+      {
+        ...base,
         date: TWINS,
         feast: 'Synthetic Twin Sunday',
         sections: [
@@ -63,7 +75,7 @@ test.describe('Today tab', () => {
   test.afterAll(async () => {
     if (!admin) return;
     await admin.from('reflections').delete().eq('date', SUNDAY);
-    await admin.from('readings').delete().in('date', [SUNDAY, WEDNESDAY, TWINS]);
+    await admin.from('readings').delete().in('date', [SUNDAY, WEDNESDAY, TWINS, MASSES]);
     await admin.from('bulletins').delete().eq('sunday_date', BULLETIN);
   });
 
@@ -83,6 +95,38 @@ test.describe('Today tab', () => {
           return box.x >= 0 && box.x + box.width <= 360;
         })
         .toBe(true);
+    });
+  });
+
+  test.describe('360px, two Masses', () => {
+    test.use({ viewport: { width: 360, height: 780 } });
+
+    test('a Mass picker defaults to the Mass during the Day and shows only its sections', async ({ page }) => {
+      test.skip(!seeded, 'needs SUPABASE_TEST_URL and SUPABASE_TEST_SERVICE_KEY');
+      await page.goto(`/?date=${MASSES}`);
+      const picker = page.getByRole('group', { name: 'Mass' });
+      const day = picker.getByRole('button', { name: 'Mass during the Day' });
+      const vigil = picker.getByRole('button', { name: 'Vigil Mass' });
+      await expect(day).toHaveAttribute('aria-pressed', 'true');
+      for (const b of [day, vigil]) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const pills = page.getByRole('navigation', { name: 'Readings' }).getByRole('button');
+      await expect(pills).toHaveText(['First Reading', 'Gospel']);
+      await expect(page.locator('[data-card]')).toHaveCount(2);
+      await expect(page.getByText('SYNTHETIC DAY GOSPEL')).toBeAttached();
+      await expect(page.getByText('SYNTHETIC VIGIL GOSPEL')).toHaveCount(0);
+      await expect(page.getByRole('group', { name: 'First Reading, Mass during the Day' })).toBeAttached();
+
+      await vigil.click();
+      await expect(vigil).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByText('SYNTHETIC VIGIL FIRST READING')).toBeVisible();
+      await expect(page.getByText('SYNTHETIC DAY GOSPEL')).toHaveCount(0);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+
+      // The Mass tab follows the same default.
+      await page.goto(`/mass?date=${MASSES}`);
+      await expect(page.locator('#holy-gospel')).toContainText('SYNTHETIC DAY GOSPEL');
+      await expect(page.locator('#holy-gospel')).toContainText('Mass during the Day');
     });
   });
 

@@ -1,6 +1,7 @@
 import { readingSlotFor, type MassDialogueLine, type MassStepData } from '@/data/order-of-mass';
 import type { DailyReadings } from '@/lib/types';
 import { BookmarkButton } from '@/components/BookmarkButton';
+import { bookmarkKey, fullLabel, sectionForKind } from '@/lib/mass-options';
 
 const SPEAKERS: Record<MassDialogueLine['speaker'], string> = {
   priest: 'Priest',
@@ -28,7 +29,9 @@ function Dialogue({ lines }: { lines: MassDialogueLine[] }) {
 
 export function MassStep({ step, readings }: { step: MassStepData; readings: DailyReadings | null }) {
   const slot = readingSlotFor(step.id);
-  const section = slot ? readings?.sections.find((s) => s.kind === slot) : undefined;
+  // On a day of several Masses this is the default Mass's section (Christmas: the Mass during the Day).
+  const item = slot && readings ? sectionForKind(readings.sections, slot) : undefined;
+  const section = item?.section;
 
   return (
     <section
@@ -45,10 +48,13 @@ export function MassStep({ step, readings }: { step: MassStepData; readings: Dai
         <div className="mt-3" data-testid={`reading-${slot}`}>
           <div className="flex items-center justify-between gap-2">
             <p className="small-caps text-sm text-muted-foreground">
+              {section.mass && <>{section.mass} · </>}
               {section.title}
               {section.citation && <> · {section.citation}</>}
             </p>
-            {slot && readings && <BookmarkButton date={readings.date} section={slot} />}
+            {item && slot && readings && (
+              <BookmarkButton date={readings.date} sectionKey={bookmarkKey(item)} label={fullLabel(item)} legacyKind={slot} />
+            )}
           </div>
           <p className="mt-2 whitespace-pre-line leading-relaxed">{section.text}</p>
           <p className="mt-3 text-xs text-muted-foreground">
