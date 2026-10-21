@@ -33,3 +33,22 @@ export function usccbSlug(date: string): string {
   const [y, m, d] = date.split('-');
   return `${m}${d}${y.slice(2)}`;
 }
+
+/** '2026-10-25' -> 'Sun, Oct 25, 2026'. */
+export function formatDay(date: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(parse(date)));
+}
+
+/** A `?date=` value when it is a real `YYYY-MM-DD` day between 1970 and 2100, else null. */
+export function dateParam(value: string | string[] | null | undefined): string | null {
+  if (typeof value !== 'string' || !ISO.test(value)) return null;
+  const year = Number(value.slice(0, 4));
+  if (year < 1970 || year > 2100) return null;
+  return addDays(value, 0) === value ? value : null;
+}

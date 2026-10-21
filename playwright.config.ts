@@ -30,6 +30,8 @@ export default defineConfig({
         ? {
             NEXT_PUBLIC_SUPABASE_URL: process.env.SUPABASE_TEST_URL,
             NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.SUPABASE_TEST_ANON_KEY,
+            // The signed-in e2e user (tests/e2e/me.spec.ts) must pass the allowlist.
+            ALLOWED_EMAIL: "me-e2e@catholica.test",
           }
         : {}),
     },

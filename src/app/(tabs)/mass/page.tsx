@@ -4,20 +4,11 @@ import { MassWakeLock } from '@/components/MassWakeLock';
 import { PostureBadge } from '@/components/PostureBadge';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { ORDER_OF_MASS_STEPS } from '@/data/order-of-mass';
-import { addDays, todayInChicago } from '@/lib/dates';
+import { dateParam, todayInChicago } from '@/lib/dates';
 import { getReadings } from '@/lib/db/readings';
 
-function validDate(value: string | string[] | undefined): string | null {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  try {
-    return addDays(value, 0) === value ? value : null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function MassPage({ searchParams }: { searchParams: Promise<{ date?: string | string[] }> }) {
-  const date = validDate((await searchParams).date) ?? todayInChicago();
+  const date = dateParam((await searchParams).date) ?? todayInChicago();
   const readings = await getReadings(date);
   const label = new Intl.DateTimeFormat('en-US', {
     timeZone: 'UTC',

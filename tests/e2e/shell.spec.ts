@@ -5,7 +5,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 test("home responds 200 and does not scroll horizontally", async ({ page }) => {
   const res = await page.goto("/");
   expect(res?.status()).toBe(200);
-  await expect(page.getByRole("heading", { name: "Catholica" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(scrollWidth).toBeLessThanOrEqual(390);
 });

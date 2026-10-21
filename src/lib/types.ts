@@ -27,3 +27,11 @@ export interface DailyReadings {
   sourceUrl: string;
   fetchedAt: string;
 }
+
+export interface Bulletin {
+  sundayDate: string;
+  sourceUrl: string;
+  storagePath: string;
+  pageCount: number;
+  fetchedAt: string;
+}

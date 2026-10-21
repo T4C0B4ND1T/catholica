@@ -108,6 +108,8 @@ Follows the Serif design system: editorial, warm, quiet. Tokens live once, as CS
 | border | #E8E4DF | #34302B |
 | accent | #B8860B | #D4A84B |
 | accent-secondary | #D4A84B | #E2BE6E |
+| accent-foreground (text on gold) | #1A1A1A | #161513 |
+| accent-ink (gold text and icons) | #8A6508 | #D4A84B |
 
 - **Type:** Playfair Display for headings, feast names and reading titles; Source Sans 3 for body, readings and UI (readings at 19px, line height 1.75, max 34em wide); IBM Plex Mono small caps (0.75rem, 0.15em tracking) for labels, dates and citations.
 - **Rules:** 1px warm rules as section dividers; the ruled small-caps section label heads each block; featured cards (Gospel, This Sunday) have a 2px gold top rule.

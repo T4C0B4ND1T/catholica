@@ -52,7 +52,7 @@ export function PostureBadge({ initial }: { initial: MassPosture }) {
   return (
     <div ref={badgeRef} className="sticky top-0 z-30 -mx-4 border-b border-border bg-background px-4 py-3">
       <div className="flex items-center justify-center gap-3" data-testid="posture-badge">
-        <Icon size={32} strokeWidth={1.5} className="text-accent" aria-hidden="true" />
+        <Icon size={32} strokeWidth={1.5} className="text-accent-ink" aria-hidden="true" />
         <span className="font-display text-2xl leading-none">
           <span className="sr-only">Current posture: </span>
           {label}
