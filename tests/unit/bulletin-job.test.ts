@@ -4,6 +4,7 @@ import { candidateSundays, runBulletinJob, type BulletinJobDeps } from '@/lib/jo
 const BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
 // 12:00 Chicago (CDT) = 17:00 UTC
 const MON = new Date('2026-10-19T17:00:00Z');
+const TUE = new Date('2026-10-20T17:00:00Z');
 const SUN = new Date('2026-10-18T17:00:00Z');
 
 function setup(over: Partial<BulletinJobDeps> = {}, saved: string[] = []) {
@@ -79,6 +80,12 @@ describe('runBulletinJob', () => {
     expect(deps.alert).toHaveBeenCalledTimes(1);
   });
 
+  it('does not alert on Tuesday with the same state (Monday rule only)', async () => {
+    const deps = setup({ now: TUE, since: '2026-10-11', fetchPdf: vi.fn(async () => null) }, ['2026-10-11']);
+    await runBulletinJob(deps);
+    expect(deps.alert).not.toHaveBeenCalled();
+  });
+
   it('does not alert on Sunday with the same state', async () => {
     const deps = setup({ now: SUN, since: '2026-10-11', fetchPdf: vi.fn(async () => null) }, ['2026-10-11']);
     await runBulletinJob(deps);
@@ -111,6 +118,25 @@ describe('runBulletinJob', () => {
     const deps = setup({ since: '2026-10-18', extractText: vi.fn(async () => { throw new Error('bad pdf'); }) });
     const res = await runBulletinJob(deps);
     expect(res.added).toEqual(['2026-10-18']);
-    expect(deps.saveBulletin).toHaveBeenCalledWith(expect.objectContaining({ text: '', pageCount: 0 }), BYTES);
+    expect(deps.saveBulletin).toHaveBeenCalledWith(expect.objectContaining({ text: null, pageCount: 0 }), BYTES);
+  });
+
+  it('reports a database outage as an error, not a missing bulletin', async () => {
+    const deps = setup({
+      now: MON,
+      since: '2026-10-11',
+      hasBulletin: vi.fn(async () => { throw new Error('db down'); }),
+      newestBulletinDate: vi.fn(async () => { throw new Error('db down'); }),
+    });
+    const res = await runBulletinJob(deps);
+    expect(res.failures).toBeGreaterThan(0);
+    expect(deps.alert).toHaveBeenCalledTimes(1);
+    expect(deps.alert).toHaveBeenCalledWith(expect.stringContaining('database'), expect.any(String));
+    expect(deps.logRun).toHaveBeenCalledWith('bulletin', 'error', expect.stringContaining('db down'));
+  });
+
+  it('returns the failure count', async () => {
+    const deps = setup({ since: '2026-10-04', fetchPdf: vi.fn(async (d: string) => { if (d === '2026-10-11') throw new Error('x'); return BYTES; }) });
+    expect((await runBulletinJob(deps)).failures).toBe(1);
   });
 });

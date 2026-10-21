@@ -18,7 +18,7 @@ export async function GET(req: Request): Promise<Response> {
     saveBulletin,
     newestBulletinDate,
     logRun,
-    alert: sendAlert,
+    alert: (subject, body) => sendAlert(subject, body, 'bulletin'),
     now: new Date(),
   });
   return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });

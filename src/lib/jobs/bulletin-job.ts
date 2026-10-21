@@ -7,7 +7,8 @@ export interface BulletinMeta {
   sundayDate: string;
   sourceUrl: string;
   pageCount: number;
-  text: string;
+  /** null when extraction failed, so a later re-extract can find the row. */
+  text: string | null;
 }
 
 export interface BulletinJobDeps {
@@ -49,65 +50,75 @@ export function candidateSundays(today: string, since?: string): string[] {
  * Downloads St. Anselm bulletins not yet saved. A date that is not posted is not an error; a failed download is
  * logged and skipped. Alerts when the host is unreachable, or from Monday on when the latest Sunday has no bulletin.
  */
-export async function runBulletinJob(deps: BulletinJobDeps): Promise<{ added: string[] }> {
+export async function runBulletinJob(deps: BulletinJobDeps): Promise<{ added: string[]; failures: number }> {
   const today = todayInChicago(deps.now);
   const currentSunday = addDays(today, -dayOfWeek(today));
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const added: string[] = [];
   const notes: string[] = [];
   let probes = 0;
-  let failures = 0;
+  let fetchFailures = 0;
+  let dbFailures = 0;
 
   for (const sunday of candidateSundays(today, deps.since)) {
+    let have: boolean;
     try {
-      if (await deps.hasBulletin(sunday)) continue;
-      probes++;
-      let bytes: Uint8Array | null;
-      try {
-        bytes = await deps.fetchPdf(sunday);
-      } catch (e) {
-        failures++;
-        notes.push(`${sunday}: ${errMessage(e)}`);
-        continue;
-      } finally {
-        if (deps.pauseMs) await sleep(deps.pauseMs);
-      }
-      if (!bytes) continue;
-      let text = '';
-      let pageCount = 0;
-      try {
-        ({ text, pageCount } = await deps.extractText(bytes));
-      } catch (e) {
-        notes.push(`${sunday}: text extraction failed, saved without search text (${errMessage(e)})`);
-      }
+      have = await deps.hasBulletin(sunday);
+    } catch (e) {
+      dbFailures++;
+      notes.push(`${sunday}: ${errMessage(e)}`);
+      continue;
+    }
+    if (have) continue;
+    probes++;
+    let bytes: Uint8Array | null;
+    try {
+      bytes = await deps.fetchPdf(sunday);
+    } catch (e) {
+      fetchFailures++;
+      notes.push(`${sunday}: ${errMessage(e)}`);
+      continue;
+    } finally {
+      if (deps.pauseMs) await sleep(deps.pauseMs);
+    }
+    if (!bytes) continue;
+    let text: string | null = null;
+    let pageCount = 0;
+    try {
+      ({ text, pageCount } = await deps.extractText(bytes));
+    } catch (e) {
+      notes.push(`${sunday}: text extraction failed, saved without search text (${errMessage(e)})`);
+    }
+    try {
       await deps.saveBulletin({ sundayDate: sunday, sourceUrl: deps.urlFor(sunday), pageCount, text }, bytes);
       added.push(sunday);
     } catch (e) {
-      failures++;
+      dbFailures++;
       notes.push(`${sunday}: ${errMessage(e)}`);
     }
   }
 
-  const detail = notes.length ? `; ${notes.join('; ')}` : '';
-  const hostDown = probes > 0 && failures === probes;
-  let stale = false;
   let newest: string | null = null;
-  if (!hostDown) {
-    try {
-      newest = await deps.newestBulletinDate();
-    } catch (e) {
-      notes.push(`newest lookup: ${errMessage(e)}`);
-    }
-    stale = dayOfWeek(today) >= 1 && (newest === null || newest < currentSunday);
+  try {
+    newest = await deps.newestBulletinDate();
+  } catch (e) {
+    dbFailures++;
+    notes.push(`newest lookup: ${errMessage(e)}`);
   }
+  const failures = fetchFailures + dbFailures;
+  const hostDown = probes > 0 && fetchFailures === probes;
+  const dbDown = dbFailures > 0;
+  const stale = !dbDown && dayOfWeek(today) === 1 && (newest === null || newest < currentSunday);
 
   let alertText: [string, string] | null = null;
-  if (hostDown) {
+  if (dbDown) {
+    alertText = ['Catholica: bulletin job database error', `Database calls failed.\n\n${notes.join('\n')}`];
+  } else if (hostDown) {
     alertText = ['Catholica: bulletin source unreachable', `Every bulletin download failed.\n\n${notes.join('\n')}`];
   } else if (stale) {
     alertText = [
       `Catholica: bulletin for ${currentSunday} is missing`,
-      `Newest saved bulletin is ${newest ?? 'none'}; the ${currentSunday} bulletin was not found.${detail}`,
+      `Newest saved bulletin is ${newest ?? 'none'}; the ${currentSunday} bulletin was not found.${notes.length ? `\n\n${notes.join('\n')}` : ''}`,
     ];
   }
   if (alertText) {
@@ -122,9 +133,9 @@ export async function runBulletinJob(deps: BulletinJobDeps): Promise<{ added: st
     notes.length ? `; ${notes.join('; ')}` : ''
   }`;
   try {
-    await deps.logRun('bulletin', hostDown ? 'error' : 'ok', summary);
+    await deps.logRun('bulletin', hostDown || dbDown ? 'error' : 'ok', summary);
   } catch (e) {
     console.error('logRun failed', errMessage(e));
   }
-  return { added };
+  return { added, failures };
 }

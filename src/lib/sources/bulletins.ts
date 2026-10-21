@@ -32,6 +32,10 @@ export async function fetchBulletinPdf(sunday: string): Promise<Uint8Array | nul
 export async function extractPdfText(bytes: Uint8Array): Promise<{ text: string; pageCount: number }> {
   // unpdf may transfer the buffer to its worker, so hand it a copy and keep the caller's bytes intact.
   const pdf = await getDocumentProxy(new Uint8Array(bytes));
-  const { text, totalPages } = await extractText(pdf, { mergePages: true });
-  return { text, pageCount: totalPages };
+  try {
+    const { text, totalPages } = await extractText(pdf, { mergePages: true });
+    return { text, pageCount: totalPages };
+  } finally {
+    await pdf.loadingTask.destroy();
+  }
 }

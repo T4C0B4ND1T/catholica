@@ -108,7 +108,8 @@ export interface BulletinSaveMeta {
   sourceUrl: string;
   pageCount: number;
   /** Text extracted from the PDF (verbatim, for search). */
-  text: string;
+  /** null when extraction failed. */
+  text: string | null;
 }
 
 /** Stores the PDF in the private bucket at `{date}.pdf` and upserts the row. Throws on failure. */

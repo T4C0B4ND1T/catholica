@@ -35,10 +35,11 @@ async function main(): Promise<void> {
 
   const { hasBulletin, newestBulletinDate, saveBulletin } = await import('../src/lib/db/bulletins');
   const { logRun } = await import('../src/lib/db/jobs');
+  const { sendAlert } = await import('../src/lib/jobs/alert');
   const { runBulletinJob } = await import('../src/lib/jobs/bulletin-job');
   const { bulletinUrl, extractPdfText, fetchBulletinPdf } = await import('../src/lib/sources/bulletins');
 
-  const { added } = await runBulletinJob({
+  const { added, failures } = await runBulletinJob({
     fetchPdf: async (d) => {
       console.log(`checking ${d}`);
       return fetchBulletinPdf(d);
@@ -52,12 +53,16 @@ async function main(): Promise<void> {
     },
     newestBulletinDate,
     logRun,
-    alert: async (subject, body) => console.error(`ALERT: ${subject}\n${body}`),
+    alert: async (subject, body) => {
+      console.error(`ALERT: ${subject}\n${body}`);
+      await sendAlert(subject, body, 'bulletin');
+    },
     now: new Date(),
     since,
     pauseMs: PAUSE_MS,
   });
-  console.log(`done: ${added.length} bulletin(s) added`);
+  console.log(`done: ${added.length} bulletin(s) added, ${failures} failure(s)`);
+  if (failures > 0) process.exitCode = 1;
 }
 
 main().catch((e: unknown) => {
