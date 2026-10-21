@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* Serif design tokens. Colors live here and nowhere else. */
+:root {
+  --background: #FAFAF8;
+  --foreground: #1A1A1A;
+  --muted: #F5F3F0;
+  --muted-foreground: #6B6B6B;
+  --card: #FFFFFF;
+  --border: #E8E4DF;
+  --accent: #B8860B;
+  --accent-secondary: #D4A84B;
+  --accent-foreground: #FFFFFF;
+  --ring: #B8860B;
+  --accent-muted: rgb(184 134 11 / 0.06);
+  --shadow-sm: 0 1px 2px rgb(26 26 26 / 0.04);
+  --shadow-md: 0 4px 12px rgb(26 26 26 / 0.06);
+  --shadow-lg: 0 8px 24px rgb(26 26 26 / 0.08);
+  --noise-opacity: 0.3;
+}
+
+/* Explicit dark (set by ThemeProvider / pre-paint script). */
+[data-theme="dark"] {
+  --background: #161513;
+  --foreground: #F2EFEA;
+  --muted: #211F1C;
+  --muted-foreground: #A8A29A;
+  --card: #1D1B19;
+  --border: #34302B;
+  --accent: #D4A84B;
+  --accent-secondary: #E2BE6E;
+  --accent-foreground: #161513;
+  --ring: #D4A84B;
+  --accent-muted: rgb(212 168 75 / 0.08);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
+  --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.4);
+  --noise-opacity: 0;
+}
+
+/* Auto: follow the system unless the user forced light. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #161513;
+    --foreground: #F2EFEA;
+    --muted: #211F1C;
+    --muted-foreground: #A8A29A;
+    --card: #1D1B19;
+    --border: #34302B;
+    --accent: #D4A84B;
+    --accent-secondary: #E2BE6E;
+    --accent-foreground: #161513;
+    --ring: #D4A84B;
+    --accent-muted: rgb(212 168 75 / 0.08);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / 0.35);
+    --shadow-lg: 0 8px 24px rgb(0 0 0 / 0.4);
+    --noise-opacity: 0;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-card: var(--card);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-secondary: var(--accent-secondary);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-muted: var(--accent-muted);
+  --color-ring: var(--ring);
+  --font-display: var(--font-playfair), Georgia, serif;
+  --font-sans: var(--font-source-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-source-sans), system-ui, sans-serif;
+  font-size: calc(1rem * var(--text-scale, 1));
+  line-height: 1.75;
+  letter-spacing: 0.01em;
+}
+
+/* Paper-noise overlay, light mode only (--noise-opacity is 0 in dark). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E");
+}
+
+.small-caps {
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
