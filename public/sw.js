@@ -8,7 +8,7 @@ const NAV_TIMEOUT_MS = 3000;
 const PREFETCH_FRESH_MS = 15 * 60 * 1000;
 
 const NEVER = [/^\/api\/me(\/|$)/, /^\/api\/cron(\/|$)/, /^\/auth(\/|$)/];
-const STALE_WHILE_REVALIDATE = [/^\/api\/readings\/[^/]+$/, /^\/api\/bulletins\/[^/]+\/pdf$/];
+const STALE_WHILE_REVALIDATE = [/^\/api\/readings\/[^/]+$/];
 const PDF = /^\/api\/bulletins\/[^/]+\/pdf$/;
 const STATIC = /^\/_next\/static\//;
 
@@ -40,6 +40,12 @@ function cacheable(res, isPage) {
 
 async function store(key, res, isPage) {
   if (!cacheable(res, isPage)) return;
+  const cache = await caches.open(CACHE);
+  await cache.put(key, res);
+}
+
+/** Saves a rebuilt bulletin PDF (see fetchPdf). Built in the worker, so it is not a 'basic' network response. */
+async function storePdf(key, res) {
   const cache = await caches.open(CACHE);
   await cache.put(key, res);
 }
@@ -152,6 +158,48 @@ async function staleWhileRevalidate(event) {
   return network;
 }
 
+/**
+ * A bulletin PDF from the network, ready to cache under its stable `/api/bulletins/<date>/pdf` path. The route
+ * redirects to a signed storage URL that expires within the hour, so the response is rebuilt: same bytes, no
+ * `redirected` flag (a redirected response cannot answer the iframe's navigation) and no signed URL anywhere in it.
+ * Null when there is no PDF to save (404, 503, or not a PDF).
+ */
+async function fetchPdf(path) {
+  const res = await fetch(path, { credentials: 'same-origin', redirect: 'follow' });
+  const type = res.headers.get('Content-Type') || '';
+  if (!res.ok || (type && !/pdf|octet-stream/i.test(type))) return null;
+  const date = PDF_DATE.exec(new URL(path, self.location.origin).pathname)?.[1] ?? 'bulletin';
+  return new Response(res.body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="bulletin-${date}.pdf"`,
+      Date: new Date().toUTCString(),
+    },
+  });
+}
+
+/**
+ * A saved bulletin PDF never changes, so a cached copy answers at once with no refresh (re-downloading 5 to 10 MB on
+ * every view is not worth it). Otherwise it is downloaded, saved and shown; if that fails (a storage host without
+ * CORS, say), the browser is left to follow the redirect itself, uncached.
+ */
+async function bulletinPdf(event, url) {
+  const key = url.origin + url.pathname;
+  const cached = await match(key);
+  if (cached) return cached;
+  try {
+    const res = await fetchPdf(key);
+    if (res) {
+      event.waitUntil(storePdf(key, res.clone()).catch(() => {}));
+      return res;
+    }
+  } catch {
+    // Fall through to the plain request.
+  }
+  return fetch(event.request);
+}
+
 async function cacheFirst(event) {
   const cached = await match(event.request);
   if (cached) return cached;
@@ -167,6 +215,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || never(url.pathname)) return;
 
   if (STATIC.test(url.pathname)) return event.respondWith(cacheFirst(event));
+  if (PDF.test(url.pathname)) return event.respondWith(bulletinPdf(event, url));
   if (STALE_WHILE_REVALIDATE.some((re) => re.test(url.pathname))) return event.respondWith(staleWhileRevalidate(event));
   if (url.pathname.startsWith('/api/')) return;
   if (request.mode === 'navigate') return event.respondWith(page(event, url));
@@ -201,6 +250,11 @@ async function prefetchOne(path) {
   const cached = await match(url.href);
   // A saved bulletin PDF never changes; anything else is refreshed unless it was saved moments ago.
   if (cached && (PDF.test(url.pathname) || isRecent(cached))) return;
+  if (PDF.test(url.pathname)) {
+    const pdf = await fetchPdf(url.origin + url.pathname);
+    if (pdf) await storePdf(url.origin + url.pathname, pdf);
+    return;
+  }
   const res = await fetch(url.href, { credentials: 'same-origin' });
   if (!cacheable(res, isPage)) return;
   if (isPage) await saveStaticFrom(await res.clone().text());
@@ -209,7 +263,10 @@ async function prefetchOne(path) {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const READINGS_DATE = /^\/api\/readings\/([^/]+)$/;
+// Bulletin entries are keyed by these paths only: a PDF is saved under its `/api/bulletins/<date>/pdf` path, never
+// under the signed storage URL it redirects to (another origin, which this worker never caches).
 const BULLETIN_DATE = /^\/(?:bulletin|api\/bulletins)\/([^/]+?)(?:\/pdf)?$/;
+const PDF_DATE = /^\/api\/bulletins\/([^/]+)\/pdf$/;
 
 /** The day a dated entry is for, or undefined for entries that are not about one day. */
 function entryDate(url) {

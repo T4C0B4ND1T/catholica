@@ -1,4 +1,8 @@
-/** Full-width PDF embed with an "Open PDF" link, since iOS Safari shows only the first page in an iframe. */
+/**
+ * Full-width PDF embed with an "Open PDF" link, since iOS Safari shows only the first page in an iframe. `src` is the
+ * stable `/api/bulletins/<date>/pdf` path, which redirects to a signed storage URL; the browser (or, offline, the
+ * service worker's saved copy) follows it, so the signed URL never ends up in the page or a cache key.
+ */
 export function PdfViewer({ src, title }: { src: string; title: string }) {
   return (
     <div>

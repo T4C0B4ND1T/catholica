@@ -69,19 +69,22 @@ export async function searchBulletins(q: string): Promise<{ sundayDate: string; 
   }));
 }
 
-/** The bulletin PDF bytes (private bucket, service role), or null when the date or file is unknown. */
-export async function getBulletinPdf(date: string): Promise<Uint8Array | null> {
+/**
+ * A short-lived signed URL for the bulletin PDF (private bucket, service role), or null when the date or file is
+ * unknown. Real bulletins are 5 to 10 MB, over Vercel's 4.5 MB function response limit, so the file is never proxied.
+ */
+export async function getBulletinPdfUrl(date: string, expiresInSeconds: number): Promise<string | null> {
   const admin = createAdminClient();
   const { data: row, error } = await admin.from('bulletins').select('storage_path').eq('sunday_date', date).maybeSingle();
-  if (error) throw new Error(`getBulletinPdf ${date}: ${error.message}`);
+  if (error) throw new Error(`getBulletinPdfUrl ${date}: ${error.message}`);
   if (!row?.storage_path) return null;
-  const { data: blob, error: dlError } = await admin.storage.from(BUCKET).download(row.storage_path);
-  if (dlError || !blob) {
+  const { data, error: signError } = await admin.storage.from(BUCKET).createSignedUrl(row.storage_path, expiresInSeconds);
+  if (signError || !data?.signedUrl) {
     // A missing object is "unknown"; anything else is a real failure.
-    if (/not.?found|does not exist|404/i.test(dlError?.message ?? '')) return null;
-    throw new Error(`getBulletinPdf ${date}: ${dlError?.message ?? 'no data'}`);
+    if (/not.?found|does not exist|404/i.test(signError?.message ?? '')) return null;
+    throw new Error(`getBulletinPdfUrl ${date}: ${signError?.message ?? 'no url'}`);
   }
-  return new Uint8Array(await blob.arrayBuffer());
+  return data.signedUrl;
 }
 
 /** True when a bulletin row exists for the Sunday. Service role (used by jobs, no request context). Throws on failure. */

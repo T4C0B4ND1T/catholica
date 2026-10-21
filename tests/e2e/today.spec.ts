@@ -104,7 +104,7 @@ test.describe('Today tab', () => {
     test('a Mass picker defaults to the Mass during the Day and shows only its sections', async ({ page }) => {
       test.skip(!seeded, 'needs SUPABASE_TEST_URL and SUPABASE_TEST_SERVICE_KEY');
       await page.goto(`/?date=${MASSES}`);
-      const picker = page.getByRole('group', { name: 'Mass' });
+      const picker = page.getByRole('group', { name: 'Mass', exact: true });
       const day = picker.getByRole('button', { name: 'Mass during the Day' });
       const vigil = picker.getByRole('button', { name: 'Vigil Mass' });
       await expect(day).toHaveAttribute('aria-pressed', 'true');

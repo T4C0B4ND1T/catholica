@@ -72,13 +72,22 @@ test.describe('Bulletin tab', () => {
     await page.goto(`/bulletin/${SUNDAY}`);
     await expect(page.locator(`iframe[src="/api/bulletins/${SUNDAY}/pdf"]`)).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open PDF' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Source: stanselmparish.org' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Source: St. Anselm Parish' })).toHaveAttribute(
+      'href',
+      'https://example.invalid/synthetic-bulletin.pdf',
+    );
 
-    const res = await request.get(`/api/bulletins/${SUNDAY}/pdf`);
-    expect(res.status()).toBe(200);
-    expect(res.headers()['content-type']).toBe('application/pdf');
-    expect(res.headers()['cache-control']).toBe('public, max-age=86400');
-    expect((await res.body()).subarray(0, 5).toString()).toBe('%PDF-');
+    // The route never sends the bytes (real bulletins exceed Vercel's 4.5 MB limit): it redirects to a signed URL.
+    const res = await request.get(`/api/bulletins/${SUNDAY}/pdf`, { maxRedirects: 0 });
+    expect(res.status()).toBe(302);
+    expect(res.headers()['cache-control']).toBe('private, no-store');
+    const location = res.headers()['location'];
+    expect(location).toContain(`/storage/v1/object/sign/${BUCKET}/${PATH}?token=`);
+    const pdf = await request.get(location);
+    expect(pdf.status()).toBe(200);
+    expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+    // Followed as a browser would, the same path ends at the PDF.
+    expect((await (await request.get(`/api/bulletins/${SUNDAY}/pdf`)).body()).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
   test('search API returns empty for short queries', async ({ request }) => {
