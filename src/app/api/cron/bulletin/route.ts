@@ -21,5 +21,6 @@ export async function GET(req: Request): Promise<Response> {
     alert: (subject, body) => sendAlert(subject, body, 'bulletin'),
     now: new Date(),
   });
-  return Response.json(result, { headers: { 'Cache-Control': 'no-store' } });
+  // A failed run is a 500 so the Vercel cron dashboard shows it; the body is the same JSON either way.
+  return Response.json(result, { status: result.status === 'error' ? 500 : 200, headers: { 'Cache-Control': 'no-store' } });
 }

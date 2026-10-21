@@ -135,6 +135,14 @@ describe('runBulletinJob', () => {
     expect(deps.logRun).toHaveBeenCalledWith('bulletin', 'error', expect.stringContaining('db down'));
   });
 
+  it('reports status error for a database outage or an unreachable host, ok otherwise', async () => {
+    const db = setup({ since: '2026-10-11', hasBulletin: vi.fn(async () => { throw new Error('db down'); }) });
+    expect((await runBulletinJob(db)).status).toBe('error');
+    const host = setup({ since: '2026-10-04', fetchPdf: vi.fn(async () => { throw new Error('down'); }) });
+    expect((await runBulletinJob(host)).status).toBe('error');
+    expect((await runBulletinJob(setup({ since: '2026-10-04' }))).status).toBe('ok');
+  });
+
   it('returns the failure count', async () => {
     const deps = setup({ since: '2026-10-04', fetchPdf: vi.fn(async (d: string) => { if (d === '2026-10-11') throw new Error('x'); return BYTES; }) });
     expect((await runBulletinJob(deps)).failures).toBe(1);

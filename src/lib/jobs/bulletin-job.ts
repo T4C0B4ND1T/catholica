@@ -50,7 +50,14 @@ export function candidateSundays(today: string, since?: string): string[] {
  * Downloads St. Anselm bulletins not yet saved. A date that is not posted is not an error; a failed download is
  * logged and skipped. Alerts when the host is unreachable, or from Monday on when the latest Sunday has no bulletin.
  */
-export async function runBulletinJob(deps: BulletinJobDeps): Promise<{ added: string[]; failures: number }> {
+export interface BulletinJobResult {
+  added: string[];
+  failures: number;
+  /** 'error' when the database failed or every download failed (the run logged as an error). */
+  status: 'ok' | 'error';
+}
+
+export async function runBulletinJob(deps: BulletinJobDeps): Promise<BulletinJobResult> {
   const today = todayInChicago(deps.now);
   const currentSunday = addDays(today, -dayOfWeek(today));
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -132,10 +139,11 @@ export async function runBulletinJob(deps: BulletinJobDeps): Promise<{ added: st
   const summary = `added ${added.length}${added.length ? ` (${added.join(', ')})` : ''}, failed ${failures}${
     notes.length ? `; ${notes.join('; ')}` : ''
   }`;
+  const status = hostDown || dbDown ? 'error' : 'ok';
   try {
-    await deps.logRun('bulletin', hostDown || dbDown ? 'error' : 'ok', summary);
+    await deps.logRun('bulletin', status, summary);
   } catch (e) {
     console.error('logRun failed', errMessage(e));
   }
-  return { added, failures };
+  return { added, failures, status };
 }
