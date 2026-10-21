@@ -81,23 +81,31 @@ function notSavedPage(date) {
 }
 
 /**
+ * The cache key for a page. Bare `/mass` means today's Mass, so it is always read and saved as
+ * `/mass?date=<today>`: a copy saved under `/mass` on an earlier day would show that day's scripture.
+ */
+function pageKey(url) {
+  if (url.pathname === '/mass' && !url.searchParams.has('date')) {
+    const dated = new URL(url.href);
+    dated.searchParams.set('date', todayInChicago());
+    return dated.href;
+  }
+  return url.href;
+}
+
+/**
  * The page to show when the network is unreachable.
- * - Exact URL first, always.
+ * - Exact URL first, always (bare `/mass` counts as `/mass?date=<today>`).
  * - `/mass?date=X`: nothing else (another day's Mass would show the wrong scripture), so a plain "not saved" page.
- *   Bare `/mass` means today: `/mass?date=<today>`, else the same "not saved" page.
  * - Anything else, including `/?date=X`: the `/` shell. The Today page then re-renders itself from the cached
  *   `/api/readings/X`, or says "Not saved for offline", so it never shows another day either.
  */
 async function offlinePage(url) {
-  const exact = await match(url.href);
+  const exact = await match(pageKey(url));
   if (exact) return exact;
   if (url.pathname === '/mass') {
-    const date = url.searchParams.get('date') || todayInChicago();
-    if (!url.searchParams.has('date')) {
-      const today = await match(`/mass?date=${date}`);
-      if (today) return today;
-    }
-    return notSavedPage(/^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayInChicago());
+    const date = url.searchParams.get('date');
+    return notSavedPage(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayInChicago());
   }
   if (url.pathname !== '/') {
     const samePage = await match(url.pathname, { ignoreSearch: true });
@@ -116,13 +124,14 @@ function delay(ms) {
  * The network answer still refreshes the cache.
  */
 async function page(event, url) {
+  const key = pageKey(url);
   const network = fetch(event.request);
-  event.waitUntil(network.then((res) => store(event.request, res.clone(), true)).catch(() => {}));
+  event.waitUntil(network.then((res) => store(key, res.clone(), true)).catch(() => {}));
   const slow = delay(NAV_TIMEOUT_MS).then(() => 'slow');
   try {
     const first = await Promise.race([network, slow]);
     if (first !== 'slow') return first;
-    const exact = await match(url.href);
+    const exact = await match(key);
     return exact || (await network);
   } catch {
     return (await offlinePage(url)) || Response.error();
@@ -210,21 +219,59 @@ function entryDate(url) {
   return undefined;
 }
 
+/** Static paths a saved page or stylesheet points at. Stylesheets name their fonts relative to themselves. */
+function staticRefs(text, base) {
+  const refs = (text.match(/\/_next\/static\/[^"'\\\s)<>?&]+/g) || []).slice();
+  for (const m of text.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) {
+    try {
+      refs.push(new URL(m[1], base).pathname);
+    } catch {
+      // Not a URL: nothing to keep.
+    }
+  }
+  return refs.filter((p) => STATIC.test(p));
+}
+
 /**
  * Keeps the cache small, so storage pressure never makes the phone wipe the site's data (and with it the unsynced
- * personal outbox). Drops readings and Today/Mass pages for days before today, and every bulletin page or PDF but the
- * newest one. Static files are left to the cache-name bump.
+ * personal outbox). Drops readings and Today/Mass pages for days before today, any bare `/mass` copy (never read: it
+ * means today, see pageKey), every bulletin page or PDF but the newest one, and static files that neither a saved
+ * page, its stylesheets, nor the running page (`assets`) uses, so old deploys' files do not pile up.
  */
-async function prune(bulletinDate) {
+async function prune(bulletinDate, assets) {
   const today = todayInChicago();
   const cache = await caches.open(CACHE);
+  const statics = [];
+  const pages = [];
   for (const req of await cache.keys()) {
     const url = new URL(req.url);
+    if (STATIC.test(url.pathname)) {
+      statics.push(req);
+      continue;
+    }
     const date = entryDate(url);
     let drop = date !== undefined && (!ISO_DATE.test(date) || date < today);
+    if (url.pathname === '/mass' && !url.searchParams.has('date')) drop = true;
     const bulletin = bulletinDate ? BULLETIN_DATE.exec(url.pathname) : null;
     if (bulletin && bulletin[1] !== bulletinDate) drop = true;
     if (drop) await cache.delete(req);
+    else if (!url.pathname.startsWith('/api/')) pages.push(req);
+  }
+
+  const used = new Set(assets.map((a) => new URL(a, self.location.origin).pathname));
+  for (const req of pages) {
+    const res = await cache.match(req);
+    if (res) for (const p of staticRefs(await res.text(), req.url)) used.add(p);
+  }
+  // Stylesheets in use bring their fonts and images along.
+  for (const req of statics) {
+    const path = new URL(req.url).pathname;
+    if (!used.has(path) || !path.endsWith('.css')) continue;
+    const res = await cache.match(req);
+    if (res) for (const p of staticRefs(await res.text(), req.url)) used.add(p);
+  }
+  for (const req of statics) {
+    if (!used.has(new URL(req.url).pathname)) await cache.delete(req);
   }
 }
 
@@ -238,7 +285,7 @@ self.addEventListener('message', (event) => {
       await Promise.all([saveStatic(assets), ...urls.map((u) => prefetchOne(u).catch(() => {}))]);
       // Without a known newest bulletin (none saved, or the lookup failed), bulletin entries are left alone.
       const bulletinDate = typeof data.bulletinDate === 'string' && ISO_DATE.test(data.bulletinDate) ? data.bulletinDate : null;
-      await prune(bulletinDate).catch(() => {});
+      await prune(bulletinDate, assets).catch(() => {});
       if (event.source) event.source.postMessage({ type: 'prefetch-done' });
     })(),
   );

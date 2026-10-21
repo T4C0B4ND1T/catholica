@@ -18,7 +18,8 @@ describe('offlineUrls', () => {
   it('includes the app pages and the Mass page for each day', () => {
     const urls = offlineUrls('2026-10-21', null);
     expect(urls).toContain('/');
-    expect(urls).toContain('/mass');
+    // Bare `/mass` is never saved: the worker serves it from today's dated copy.
+    expect(urls).not.toContain('/mass');
     expect(urls).toContain('/bulletin');
     expect(urls).toContain('/mass?date=2026-10-21');
     expect(urls).toContain('/mass?date=2026-10-27');

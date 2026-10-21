@@ -30,10 +30,10 @@ const synthetic = (date: string) => ({
 
 type Day = { feast: string; gospel: string };
 
-/** Waits until the worker controls the page and has cached the coming week, `/` and `/mass`. */
+/** Waits until the worker controls the page and has cached the coming week, `/` and today's Mass. */
 async function waitForPrefetch(page: Page) {
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
-  const wanted = [...WEEK.map((d) => `/api/readings/${d}`), '/', '/mass'];
+  const wanted = [...WEEK.map((d) => `/api/readings/${d}`), '/', `/mass?date=${TODAY}`];
   await expect
     .poll(
       () =>
@@ -162,6 +162,39 @@ test.describe('Offline', () => {
     expect(errors).toEqual([]);
   });
 
+  test('a stale cached Mass page still shows today offline', async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto('/');
+    await waitForPrefetch(page);
+    // Simulate an older build or yesterday's visit: another day's Mass stored under bare `/mass`.
+    const other = WEEK[2];
+    await page.evaluate(
+      async ({ cacheName, otherDate }) => {
+        const cache = await caches.open(cacheName);
+        const res = await fetch(`/mass?date=${otherDate}`);
+        await cache.put('/mass', res);
+      },
+      { cacheName: CACHE, otherDate: other },
+    );
+    await goOffline(context);
+    const today = days.get(TODAY)!;
+    const otherGospel = days.get(other)!.gospel;
+
+    await page.goto('/mass');
+    await expect(page.locator('#holy-gospel').getByText(today.gospel)).toBeVisible();
+    await expect(page.getByText(otherGospel)).toHaveCount(0);
+
+    // The Mass tab links to bare `/mass`: tapping it offline must also land on today.
+    await page.goto('/');
+    await expect(page.getByText(today.gospel)).toBeVisible();
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Mass' }).click();
+    await expect(page.getByRole('heading', { name: 'Order of the Mass' })).toBeVisible();
+    await expect(page.locator('#holy-gospel').getByText(today.gospel)).toBeVisible();
+    await expect(page.getByText(otherGospel)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
   test('a slow connection waits for the real page instead of showing another one', async ({ page, context }) => {
     await page.goto('/');
     await waitForPrefetch(page);
@@ -186,7 +219,9 @@ test.describe('Offline', () => {
     await expect(page.getByText(days.get(TODAY)!.gospel)).toHaveCount(0);
   });
 
-  test('after a prefetch, past days and older bulletins are dropped from the cache', async ({ page }) => {
+  test('after a prefetch, past days, older bulletins and old deploys are dropped from the cache', async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/');
     await waitForPrefetch(page);
     const past = addDays(TODAY, -1);
@@ -198,6 +233,10 @@ test.describe('Offline', () => {
       `/mass?date=${past}`,
       `/bulletin/${old}`,
       `/api/bulletins/${old}/pdf`,
+      // Saved by an older worker: never read now, since bare `/mass` means today.
+      '/mass',
+      // A previous deploy's script, which no saved page uses any more.
+      '/_next/static/chunks/old-deploy-0000.js',
       `/bulletin/${newest}`,
       `/api/bulletins/${newest}/pdf`,
     ];
@@ -218,10 +257,27 @@ test.describe('Offline', () => {
       },
       { cacheName: CACHE, paths: planted, bulletinDate: newest },
     );
-    for (const gone of planted.slice(0, 5)) expect(keys).not.toContain(gone);
+    for (const gone of planted.slice(0, 7)) expect(keys).not.toContain(gone);
     expect(keys).toEqual(expect.arrayContaining([`/bulletin/${newest}`, `/api/bulletins/${newest}/pdf`]));
     // This week's entries stay.
     expect(keys).toEqual(expect.arrayContaining([`/api/readings/${TODAY}`, `/mass?date=${TODAY}`, '/']));
+    // The running deploy's scripts stay.
+    const scripts = await page.evaluate(() =>
+      [...document.scripts]
+        .map((s) => (s.src ? new URL(s.src).pathname : ''))
+        .filter((p) => p.startsWith('/_next/static/')),
+    );
+    expect(scripts.length).toBeGreaterThan(0);
+    const staticKeys = keys.map((k) => k.split('?')[0]);
+    expect(staticKeys).toEqual(expect.arrayContaining(scripts));
+
+    // What the prune kept is enough to start the app offline and tap to the Mass.
+    await goOffline(context);
+    await page.reload();
+    await expect(page.getByText(days.get(TODAY)!.gospel)).toBeVisible();
+    await page.getByRole('link', { name: 'Follow the Mass' }).click();
+    await expect(page.locator('#holy-gospel').getByText(days.get(TODAY)!.gospel)).toBeVisible();
+    expect(errors).toEqual([]);
   });
 
   test('personal and auth requests are never cached', async ({ page }) => {
