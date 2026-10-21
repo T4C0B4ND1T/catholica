@@ -39,15 +39,18 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
       onClick={(e) => {
         if (e.target === ref.current) ref.current.close();
       }}
-      className="fixed inset-x-0 bottom-0 top-auto m-0 max-h-[85dvh] w-full max-w-none overflow-y-auto rounded-t-lg border border-border bg-card p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-foreground shadow-lg backdrop:bg-foreground/40 md:inset-auto md:left-1/2 md:top-1/2 md:max-w-[34em] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:pb-6"
+      className="fixed inset-x-0 bottom-0 top-auto m-0 max-h-[85dvh] w-full max-w-none overflow-y-auto rounded-t-lg border border-border bg-card p-0 text-foreground shadow-lg backdrop:bg-foreground/40 md:inset-auto md:left-1/2 md:top-1/2 md:max-w-[34em] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg"
     >
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="font-display text-xl tracking-[-0.01em]">{title}</h2>
-        <IconButton label="Close" onClick={() => ref.current?.close()}>
-          <X size={20} strokeWidth={1.5} aria-hidden="true" />
-        </IconButton>
+      {/* Padding lives here, not on <dialog>, so only true backdrop clicks target the dialog element. */}
+      <div data-sheet-body className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:pb-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="font-display text-xl tracking-[-0.01em]">{title}</h2>
+          <IconButton label="Close" onClick={() => ref.current?.close()}>
+            <X size={20} strokeWidth={1.5} aria-hidden="true" />
+          </IconButton>
+        </div>
+        {children}
       </div>
-      {children}
     </dialog>
   );
 }

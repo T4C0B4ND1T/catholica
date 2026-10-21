@@ -32,7 +32,7 @@ export function TabBar() {
                 aria-current={active ? "page" : undefined}
                 className={`-mt-px flex min-h-14 touch-manipulation flex-col items-center justify-center gap-0.5 border-t-2 px-4 text-xs tracking-[0.05em] transition-colors duration-200 ease-out focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring md:min-h-12 md:flex-row md:gap-2 md:text-sm ${
                   active
-                    ? "border-accent text-accent"
+                    ? "border-accent text-foreground"
                     : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
