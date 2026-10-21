@@ -1,10 +1,6 @@
 # Build handoff (Catholica v1)
 
-Copied from the controller's working ledger so a later session can resume. Tasks marked complete are done and merged or in an open PR; do not redo them.
-
-Remaining plan tasks: 4 (USCCB parser + fixtures + seed.sql; also add src/app/api/cron/readings/route.ts wiring runReadingsJob), 6 (bulletin write side, job, cron route, backfill), 12 (Catechism lookup + AI Q&A), 14 (provision production Supabase, Vercel env vars, deploy, verify on a phone). All others are done in PR #1 and PR #2. Tasks 4, 6, 12 and 14 need network access to bible.usccb.org, stanselmparish.org, files.ecatholic.com and www.catholiccrossreference.online.
-
-Task 9 already added ReadingKind/ReadingSection/DailyReadings to src/lib/types.ts and getReadings() to src/lib/db/readings.ts; Task 4 adds saveReadings and the parser and must not redefine them.
+Copied from the controller's working ledger so a later session can resume. Tasks 1-13 are complete (PR #2, plus the stacked PR from claude/project-thread-vothf9). The production Supabase schema is applied. Remaining: Task 14 steps 2-4 (Vercel env vars, seed live data, phone-size verification); see README "Production".
 
 ---
 
@@ -131,3 +127,45 @@ All network-free tasks done (1,2,3,5,7,8,9,10,11,13). Remaining: 4,6,12,14 need 
 Final review: merge after fixes — C1 stale bare /mass offline; I2 gold AA tokens; I3 static cache growth; minors 5,6,8 included. Ruling: 4 (crons 404 until Tasks 4/6) noted in PR body; 7, 9 deferred. Final fix dispatched.
 Final fix: 8d84b67, 6a410d6, 1b7302d. Scoped re-review dispatched.
 Final fix re-review: all addressed; static pruning concern judged safe (no dynamic imports). PR #2 ready.
+--- Session 2 (thread vothf9), 2026-10-21, branch claude/project-thread-vothf9 from feat/catholica-v1 68c1aa9 (PR #2 still open)
+Network: usccb, files.ecatholic.com, catholiccrossreference reachable via curl. stanselmparish.org returns a Cloudflare JS challenge (cf-mitigated: challenge) to any client here.
+USCCB intermittently 403s (needs UA; retries succeed).
+Fixtures captured by controller with curl (untouched): usccb sunday/weekday/easter-vigil, christmas landing (nativity-lord-christmas, links to 4 Mass pages) + christmas-2025-12-25-{Vigil,Night,Dawn,Day}.html; bulletins/20261018.pdf; catechism/1324.json (POST /catechism/ form TOKEN=1&lang=en&query=1324&offset=0).
+- Ruling: Christmas-type days: usccbUrl page is a landing listing Masses (ul.nested a.item); fetchUsccb follows redirects, detects the landing, fetches each Mass page in page order and concatenates sections with title prefixed by the Mass name — spec requires every Mass option kept — cost if wrong: parser rework.
+- Ruling: bulletin list page is Cloudflare-challenged, so no list.html fixture; source probes https://files.ecatholic.com/17181/bulletins/YYYYMMDD.pdf directly by Sunday date (verified 200 without ?t=, 403 XML when absent). parseBulletinList dropped — never invent fixtures — cost if wrong: if parish moves files, probing finds nothing (alert fires by Monday rule).
+- Ruling: Supabase free tier = 1 GB storage; full archive (~165 Sundays × 2–5 MB ≈ 600 MB) fits but tight; backfill takes --since (default 2023-08-06 per plan) — cost if wrong: storage limit later.
+Task 4: BASE 84234dd, implementer dispatched (a484a25bca2db34ee)
+Task 4: implemented 13e49d8 (DONE). Review dispatched. Choices: Or→other, Epistle→reading2, Reading III–VII→other.
+- Ruling: Task 6 implementer runs in parallel with Task 4 review/fix (disjoint files; commits stage own paths only) — time — cost if wrong: an index race, easy to redo.
+- Ruling: bulletin job probes Sundays from since (cron default 8 weeks back) to current Sunday, plus coming Sunday Thu–Sat; Monday alert rule kept; PDF must start with %PDF.
+Task 6: BASE 13e49d8, implementer dispatched (a478ecb40e7845634)
+Task 4 review: Approved w/ I1 Vigil Reading II vs Epistle both reading2 (MassStep shows Genesis); I2 Or→other mislabeled.
+- Ruling: Or headings inherit the previous section's kind; on Vigil-style pages Reading III+/Epistle present → Roman readings after I are 'other', Epistle is reading2 — spec forbids mislabeling, overrides brief's 'else other' — cost if wrong: label tweak.
+Task 4: fix round 1 dispatched (I1, I2, M2 throw on titled empty block, M3 usccb host, M5 lambdas).
+Task 4: minor (deferred): Christmas UI — MassStep shows Vigil Mass readings; pills repeat 'First Reading' w/o Mass name; BookmarkButton section key collides across same-kind sections; cron route lacks a 401 test.
+Task 6: implemented 28f9837 (DONE_WITH_CONCERNS: no RED run; alert repeats Mon–Sat; text-extract failure saves empty text). Review dispatched.
+Task 4: fix round 1/5 (5 addressed, 0 open; commits 28f9837..bbba399)
+Task 4: minor (deferred): no test for M3 host filter.
+Task 4: complete (commits 84234dd..bbba399, review clean)
+Task 12: implementer dispatched (a56cf8c49086e2cf3), parallel with Task 6 review.
+Task 6 review: Needs fixes — I1 DB outage → false stale alert + ok run; I2 backfill exit 0 on total failure.
+- Ruling: stale-bulletin alert only on Monday (Chicago) runs — spec 'alert fires only by the Monday rule'; daily repeats were noise — cost if wrong: a missed Monday cron means no alert that week.
+Task 6: fix round 1 dispatched (I1, I2, M1 pdf destroy, M2 Monday-only, M3 text null, M4 separator, M5 sendAlert job name).
+Task 6: minor (deferred): body-read timeout surfaces as DOMException not SourceError; no RED run.
+Task 12: implemented 20b3678 (DONE; UI not browser-checked). Review dispatched.
+Task 12 review: Approved, no Critical/Important.
+Task 12: minor (deferred): bare <sup> not stripped; non-JSON 200 → 404 instead of 502; verification errors swallowed silently; UI load() race + inconsistent error clearing; 401 generic message; answer text may name unverified CCC numbers (add 'only listed paragraphs were checked' line); no GET route tests; range citations 1324-1327 capture first only.
+Task 12: complete (commits bbba399..20b3678, review clean)
+Task 6: fix round 1/5 (7 addressed, 0 open; commits 20b3678..68842f5)
+Task 6: minor (deferred): stacked JSDoc on text in db/bulletins.ts; Resend failure path in alert not checked.
+Task 6: complete (commits 13e49d8..68842f5, review clean)
+Final review: range 68c1aa9..HEAD dispatched.
+Task 14: Joel approved Supabase setup 04:49Z; migrations init + bulletin_search applied to qpvfpdbzogltyddxxksx, bucket bulletins private exists. Setup guide /mnt/project-files/catholica/go-live-setup.md (CRON_SECRET in scratchpad/cron_secret). Waiting on Joel: Vercel env vars, Google provider, prod URL. catholica.vercel.app is NOT Joel's (Holy Rosary).
+Final review: With fixes — C1 PDF route buffers 4.7–10 MB PDFs (> Vercel 4.5 MB response cap); I1 Palm Sunday "At the Mass - Reading I" → other; I2 "Or:" / "Or at afternoon…" not alternates; I3 multi-Mass days (Christmas, St John Baptist, Peter&Paul) wrong Mass in MassStep, pill row unlabeled, bookmark key collisions; I4 spec requires Catechism keyword search (plan dropped it).
+- Ruling: I4 — add keyword search (spec is binding; source supports text queries, verified "\"source and summit\"" → 1324, 2031; purgatory → 5 paragraphs) — cost if wrong: extra UI.
+- Ruling: I3 fixed in this wave (Christmas in 9 weeks; bookmarks would accumulate with bad keys) — default Mass = "Mass during the Day" (else last Mass) on landing days.
+- Ruling: C1 — PDF route redirects (302) to a short-lived Supabase signed URL; implementer verifies SW/offline path.
+Controller captured fixtures 212d8cd + this commit: palm-sunday-2026-03-29, all-souls-2026-11-02, easter-sunday-2026-04-05, john-baptist-2026-06-24 (+ -Vigil, -Day; links have no .cfm), catechism search-source-and-summit.json (quoted), search-purgatory.json.
+Final fix: 7d3cbf6..b1786d5 (DONE_WITH_CONCERNS minor; e2e ran on local Supabase). Scoped re-review dispatched.
+Final fix re-review: all addressed. Residual minors parked: SW double fetch on PDF miss; e2e iframe-from-cache assertion weak; bookmark exact-key match brittle if headings change; hosted Storage CORS unverified (check in Task 14 phone test).
+- Ruling: residual minors parked — no prod data yet, none block deploy — cost if wrong: small follow-ups.
