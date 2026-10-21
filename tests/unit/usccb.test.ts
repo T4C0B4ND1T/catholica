@@ -54,6 +54,53 @@ describe('parseUsccb', () => {
     expect(r.sections[3]).toMatchObject({ title: 'or', kind: 'psalm' });
   });
 
+  it('Palm Sunday: the Mass reading is reading1, the procession Gospel stays other, the Passion is the Gospel', () => {
+    const r = parseUsccb(fx('palm-sunday-2026-03-29'), '2026-03-29');
+    expect(r.sections.map((s) => [s.title, s.kind])).toEqual([
+      ['At the Procession with Palms - Gospel', 'other'],
+      ['At the Mass - Reading I', 'reading1'],
+      ['Responsorial Psalm', 'psalm'],
+      ['Reading II', 'reading2'],
+      ['Verse before the Gospel', 'alleluia'],
+      ['Gospel', 'gospel'],
+      ['or', 'gospel'],
+    ]);
+    expect(r.sections.find((s) => s.kind === 'gospel')?.citation).toBe('Matthew 26:14—27:66');
+  });
+
+  it('All Souls: "Or:" is an alternate second reading', () => {
+    const r = parseUsccb(fx('all-souls-2026-11-02'), '2026-11-02');
+    expect(r.sections.map((s) => [s.title, s.kind])).toEqual([
+      ['Reading I', 'reading1'],
+      ['Responsorial Psalm', 'psalm'],
+      ['Reading II', 'reading2'],
+      ['Or:', 'reading2'],
+      ['Alleluia', 'alleluia'],
+      ['Gospel', 'gospel'],
+    ]);
+  });
+
+  it('Easter Sunday: alternates and the afternoon Gospel keep the kind before them, the Sequence is named', () => {
+    const r = parseUsccb(fx('easter-sunday-2026-04-05'), '2026-04-05');
+    expect(r.sections.map((s) => [s.title, s.kind])).toEqual([
+      ['Reading 1', 'reading1'],
+      ['Responsorial Psalm', 'psalm'],
+      ['Reading 2', 'reading2'],
+      ['Or', 'reading2'],
+      ['Sequence - Victimæ paschali laudes', 'sequence'],
+      ['Alleluia', 'alleluia'],
+      ['Gospel', 'gospel'],
+      ['Or', 'gospel'],
+      ['Or at afternoon or evening mass', 'gospel'],
+    ]);
+  });
+
+  it('a leading alternate with nothing before it is other', () => {
+    const block = (t: string) => `<div class="b-verse"><h3 class="name">${t}</h3><div class="content-body"><p>x</p></div></div>`;
+    const r = parseUsccb(block('Or:') + block('Gospel'), '2026-10-25');
+    expect(r.sections.map((s) => s.kind)).toEqual(['other', 'gospel']);
+  });
+
   it('throws on a block with a title but an empty body', () => {
     const html = '<div class="b-verse"><h3 class="name">Gospel</h3><div class="address">Mt 1</div><div class="content-body"><p>&nbsp;</p></div></div>';
     expect(() => parseUsccb(html, '2026-10-25')).toThrow(/empty body/);

@@ -19,6 +19,14 @@ function oneLine(s: string): string {
 /** Maps a heading such as "Reading II" or "Verse Before the Gospel" to a kind; anything unrecognised is 'other'. */
 function kindOf(title: string, multiReading: boolean): ReadingKind {
   const t = title.toLowerCase();
+  // A " - " qualifier: "At the Mass - Reading I" names the reading after it, "Sequence - Victimæ paschali laudes"
+  // before it. The Palm Sunday procession Gospel is not the Mass Gospel (the Passion), so it stays 'other'.
+  const parts = /^(.+?)\s+-\s+(.+)$/.exec(t);
+  if (parts) {
+    if (parts[1].startsWith('at the procession')) return 'other';
+    const first = kindOf(parts[1], multiReading);
+    return first !== 'other' ? first : kindOf(parts[2], multiReading);
+  }
   if (/^reading\s+(1|i)$/.test(t)) return 'reading1';
   if (t.startsWith('responsorial psalm')) return 'psalm';
   // On a vigil with Reading III or later (or an Epistle), "Reading II" is just one of many Old Testament readings;
@@ -30,6 +38,9 @@ function kindOf(title: string, multiReading: boolean): ReadingKind {
   if (t === 'gospel') return 'gospel';
   return 'other';
 }
+
+/** "Or", "Or:" and "Or at afternoon or evening mass" offer an alternative to the section before them. */
+const ALTERNATE = /^or\b/i;
 
 /** Reading text with `<br>` as newlines and paragraphs separated by a blank line. Words are copied as published. */
 function bodyText($: cheerio.CheerioAPI, body: cheerio.Cheerio<never>): string {
@@ -73,8 +84,8 @@ export function parseUsccb(html: string, date: string): Omit<DailyReadings, 'fet
     if (!title) return;
     const text = bodyText($, b.find('.content-body').first() as cheerio.Cheerio<never>);
     if (!text) throw new Error(`USCCB page for ${date}: "${title}" has an empty body`);
-    // "Or" offers an alternative to the section before it, so it takes that section's kind.
-    const kind = /^or$/i.test(title) ? (sections.at(-1)?.kind ?? 'other') : kindOf(title, multiReading);
+    // An alternate takes the kind of the section before it; the title is kept as published.
+    const kind = ALTERNATE.test(title) ? (sections.at(-1)?.kind ?? 'other') : kindOf(title, multiReading);
     sections.push({ kind, title, citation: oneLine(b.find('.address').first().text()), text });
   });
 
