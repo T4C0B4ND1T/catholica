@@ -83,3 +83,50 @@ export async function getBulletinPdf(date: string): Promise<Uint8Array | null> {
   }
   return new Uint8Array(await blob.arrayBuffer());
 }
+
+/** True when a bulletin row exists for the Sunday. Service role (used by jobs, no request context). Throws on failure. */
+export async function hasBulletin(date: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().from('bulletins').select('sunday_date').eq('sunday_date', date).maybeSingle();
+  if (error) throw new Error(`hasBulletin ${date}: ${error.message}`);
+  return data !== null;
+}
+
+/** Sunday date of the newest saved bulletin, or null. Service role, no request context. */
+export async function newestBulletinDate(): Promise<string | null> {
+  const { data, error } = await createAdminClient()
+    .from('bulletins')
+    .select('sunday_date')
+    .order('sunday_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`newestBulletinDate: ${error.message}`);
+  return data?.sunday_date ?? null;
+}
+
+export interface BulletinSaveMeta {
+  sundayDate: string;
+  sourceUrl: string;
+  pageCount: number;
+  /** Text extracted from the PDF (verbatim, for search). */
+  text: string;
+}
+
+/** Stores the PDF in the private bucket at `{date}.pdf` and upserts the row. Throws on failure. */
+export async function saveBulletin(meta: BulletinSaveMeta, bytes: Uint8Array): Promise<void> {
+  const admin = createAdminClient();
+  const storagePath = `${meta.sundayDate}.pdf`;
+  const { error: upError } = await admin.storage.from(BUCKET).upload(storagePath, bytes, {
+    contentType: 'application/pdf',
+    upsert: true,
+  });
+  if (upError) throw new Error(`saveBulletin upload ${meta.sundayDate}: ${upError.message}`);
+  const { error } = await admin.from('bulletins').upsert({
+    sunday_date: meta.sundayDate,
+    source_url: meta.sourceUrl,
+    storage_path: storagePath,
+    page_count: meta.pageCount,
+    text: meta.text,
+    fetched_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(`saveBulletin row ${meta.sundayDate}: ${error.message}`);
+}
