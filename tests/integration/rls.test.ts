@@ -86,4 +86,35 @@ describe.skipIf(!enabled)('row-level security', () => {
     const still = await admin.from('readings').select('date').eq('date', '2099-01-01');
     expect(still.data).toHaveLength(1);
   });
+
+  it('isolates bookmarks and intentions per user', async () => {
+    expect((await a.from('bookmarks').insert({ date: '2099-01-01', section: 'gospel' })).error).toBeNull();
+    expect((await a.from('intentions').insert({ text: 'for peace' })).error).toBeNull();
+    for (const table of ['bookmarks', 'intentions']) {
+      expect((await a.from(table).select('*')).data).toHaveLength(1);
+      const other = await b.from(table).select('*');
+      expect(other.error).toBeNull();
+      expect(other.data).toHaveLength(0);
+    }
+    const { data } = await a.auth.getUser();
+    const spoof = await b.from('intentions').insert({ user_id: data.user!.id, text: 'spoof' });
+    expect(spoof.error).not.toBeNull();
+  });
+
+  it("rejects a tick on someone else's routine", async () => {
+    const r = await a.from('routines').insert({ name: 'Rosary' }).select().single();
+    expect(r.error).toBeNull();
+    const own = await a.from('routine_ticks').insert({ routine_id: r.data!.id, date: '2099-01-01' });
+    expect(own.error).toBeNull();
+    const bad = await b.from('routine_ticks').insert({ routine_id: r.data!.id, date: '2099-01-01' });
+    expect(bad.error).not.toBeNull();
+    expect((await b.from('routine_ticks').select('*')).data).toHaveLength(0);
+  });
+
+  it('keeps job_runs service-role only', async () => {
+    await admin.from('job_runs').insert({ job: 'test', status: 'ok', message: 'secret upstream error' });
+    expect((await anon.from('job_runs').select('*')).data ?? []).toHaveLength(0);
+    expect((await a.from('job_runs').select('*')).data ?? []).toHaveLength(0);
+    await admin.from('job_runs').delete().eq('job', 'test');
+  });
 });

@@ -103,7 +103,7 @@ alter table public.job_runs enable row level security;
 create policy "public read" on public.readings for select to anon, authenticated using (true);
 create policy "public read" on public.reflections for select to anon, authenticated using (true);
 create policy "public read" on public.bulletins for select to anon, authenticated using (true);
-create policy "public read" on public.job_runs for select to anon, authenticated using (true);
+-- job_runs has no policies: service role only (messages may carry upstream error text).
 
 alter table public.notes enable row level security;
 alter table public.bookmarks enable row level security;
@@ -120,7 +120,14 @@ create policy "owner all" on public.intentions for all to authenticated
 create policy "owner all" on public.routines for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "owner all" on public.routine_ticks for all to authenticated
-  using (user_id = auth.uid()) with check (user_id = auth.uid());
+  using (
+    user_id = auth.uid()
+    and exists (select 1 from public.routines r where r.id = routine_id and r.user_id = auth.uid())
+  )
+  with check (
+    user_id = auth.uid()
+    and exists (select 1 from public.routines r where r.id = routine_id and r.user_id = auth.uid())
+  );
 
 -- Storage: private bucket for bulletin PDFs (served through the app with the admin client).
 insert into storage.buckets (id, name, public) values ('bulletins', 'bulletins', false)
