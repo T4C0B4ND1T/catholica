@@ -41,7 +41,7 @@ export default async function PrayerPage({ params }: { params: Promise<{ slug: s
             <div className="-mr-2 -mt-2 flex justify-end">
               <SpeakButton label={prayer.title} text={`${prayer.title}. ${spoken(prayer.text)}`} />
             </div>
-            <div className="space-y-4 text-[calc(19px*var(--text-scale,1))] leading-[1.75]" data-testid="prayer-text">
+            <div className="space-y-4 text-[length:calc(19px*var(--text-scale,1))] leading-[1.75]" data-testid="prayer-text">
               {prayer.text.split("\n\n").map((para) => (
                 <p key={para} className="whitespace-pre-line">
                   {para}

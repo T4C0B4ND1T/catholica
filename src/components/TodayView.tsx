@@ -5,7 +5,10 @@ import { ReflectionPanel } from "@/components/ReflectionPanel";
 import { SourceFooter } from "@/components/SourceFooter";
 import { Card } from "@/components/ui/Card";
 import { buttonClasses } from "@/components/ui/Button";
+import { formatDay } from "@/lib/dates";
 import { liturgicalDay } from "@/lib/liturgical/calendar";
+import { upcomingHolyDay } from "@/lib/liturgical/holy-days";
+import { saintsOfDay } from "@/lib/liturgical/saints";
 import { usccbUrl } from "@/lib/sources/usccb-url";
 import type { DailyReadings, LitColor, Season } from "@/lib/types";
 
@@ -81,6 +84,9 @@ export function TodayView({
 }) {
   const day = liturgicalDay(date);
   const sections = readings?.sections ?? [];
+  const saints = saintsOfDay(date, readings?.feast ?? "");
+  // From today, the week ahead; on another day, that day alone.
+  const holyDay = upcomingHolyDay(date, date === today ? 7 : 0);
 
   return (
     <div className="space-y-8">
@@ -99,7 +105,27 @@ export function TodayView({
             Year {day.sundayCycle} · Week {day.weekdayCycle}
           </span>
         </p>
+        {saints.length > 0 && (
+          <ul className="mt-2 text-sm text-muted-foreground" data-testid="saints-of-day">
+            {saints.map((s) => (
+              <li key={s.name}>
+                {s.label && <span>{s.label}: </span>}
+                <span className="text-foreground">{s.name}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </header>
+
+      {holyDay && (
+        <Card featured data-testid="holy-day" className="text-center">
+          <p className="small-caps text-muted-foreground">
+            Holy day of obligation{holyDay.date === date ? " · today" : ` · ${formatDay(holyDay.date)}`}
+          </p>
+          <p className="mt-2 font-display text-xl leading-snug">{holyDay.name}</p>
+          <p className="mt-2 text-sm text-muted-foreground">Vigil Masses are usually the evening before. Check the bulletin for times.</p>
+        </Card>
+      )}
 
       {readings && sections.length > 0 ? (
         <ReadingsCarousel key={date} date={date} sections={sections} />
