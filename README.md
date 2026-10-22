@@ -54,7 +54,10 @@ through the admin API on the local stack only.
   Google provider, set the Site URL, add `https://<domain>/auth/callback` to Redirect URLs, and turn off email sign-ups.
 - Vercel: set every variable in `.env.example` for Production and Preview. `maxDuration = 300` on the cron routes needs
   Fluid compute.
-- Crons (`vercel.json`, UTC): `/api/cron/readings` keeps today through today + 7 saved; `/api/cron/bulletin` probes
+- Crons (`vercel.json`, UTC): `/api/cron/readings` keeps today through today + 7 saved. It reads USCCB's feed
+  (`bible.usccb.org/readings.rss`) first, because the readings pages challenge datacenter requests; the feed holds
+  only the last ten days and adds each day at 4:30 a.m. Eastern, so the cron runs at 10:00 UTC and future days are
+  best effort from the pages; `/api/cron/bulletin` probes
   recent Sundays at `files.ecatholic.com/17181/bulletins/YYYYMMDD.pdf` (the parish list page is behind a Cloudflare
   challenge). Both need `Authorization: Bearer $CRON_SECRET`, which Vercel sends automatically.
 - Seed after the first deploy:

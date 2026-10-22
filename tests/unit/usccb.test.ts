@@ -2,11 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import * as cheerio from 'cheerio';
 import { describe, expect, it, vi } from 'vitest';
-import { fetchUsccb, parseMassLinks, parseUsccb, usccbUrl } from '@/lib/sources/usccb';
+import { fetchUsccb, parseMassLinks, parseUsccb, parseUsccbRss, USCCB_RSS_URL, usccbUrl } from '@/lib/sources/usccb';
 
 vi.mock('server-only', () => ({}));
 
 const fx = (name: string) => readFileSync(join(__dirname, '../fixtures/usccb', `${name}.html`), 'utf8');
+const rss = () => readFileSync(join(__dirname, '../fixtures/usccb/readings-2026-10-21.rss'), 'utf8');
 const headingCount = (html: string) => cheerio.load(html)('h3.name').length;
 
 describe('usccbUrl', () => {
@@ -132,6 +133,40 @@ describe('parseUsccb', () => {
   });
 });
 
+describe('parseUsccbRss', () => {
+  it('gives the same sections, word for word, as the page for the same day', () => {
+    const feed = parseUsccbRss(rss(), '2026-10-21');
+    const page = parseUsccb(fx('weekday-2026-10-21'), '2026-10-21');
+    expect(feed?.readings.sections).toEqual(page.sections);
+    expect(feed?.readings.feast).toBe(page.feast);
+    expect(feed?.readings.sourceUrl).toBe(page.sourceUrl);
+    expect(feed?.readings.lectionary).toBeNull();
+  });
+
+  it('reads a Sunday with a second reading, citation without the heading', () => {
+    const r = parseUsccbRss(rss(), '2026-10-18')!.readings;
+    expect(r.feast).toBe('Twenty-ninth Sunday in Ordinary Time');
+    expect(r.sections.map((s) => [s.title, s.kind, s.citation])).toEqual([
+      ['Reading 1', 'reading1', 'Isaiah 45:1, 4-6'],
+      ['Responsorial Psalm', 'psalm', 'Psalm 96:1, 3, 4-5, 7-8, 9-10'],
+      ['Reading 2', 'reading2', '1 Thessalonians 1:1-5b'],
+      ['Alleluia', 'alleluia', 'Philippians 2:15d, 16a'],
+      ['Gospel', 'gospel', 'Matthew 22:15-21'],
+    ]);
+    expect(r.sections.every((s) => !s.text.includes('Copyright'))).toBe(true);
+  });
+
+  it('keeps the readings when an entry also links an optional memorial', () => {
+    const entry = parseUsccbRss(rss(), '2026-10-20')!;
+    expect(entry.readings.sections).toHaveLength(4);
+    expect(entry.masses).toHaveLength(1);
+  });
+
+  it('is null for a date the feed does not hold', () => {
+    expect(parseUsccbRss(rss(), '2026-10-25')).toBeNull();
+  });
+});
+
 describe('parseMassLinks', () => {
   it('lists the Christmas Masses in page order', () => {
     expect(parseMassLinks(fx('christmas-2025-12-25'))).toEqual([
@@ -165,6 +200,34 @@ describe('fetchUsccb', () => {
     if (!(url in pages)) throw new Error(`unexpected ${url}`);
     return pages[url];
   };
+
+  it('reads the feed first and does not touch the page when the feed has the day', async () => {
+    const urls: string[] = [];
+    const r = await fetchUsccb('2026-10-21', async (u) => {
+      urls.push(u);
+      if (u === USCCB_RSS_URL) return rss();
+      throw new Error('challenged');
+    });
+    expect(urls).toEqual([USCCB_RSS_URL]);
+    expect(r.sections.map((s) => s.kind)).toEqual(['reading1', 'psalm', 'alleluia', 'gospel']);
+  });
+
+  it('falls back to the page for a day the feed does not hold', async () => {
+    const r = await fetchUsccb('2026-10-25', async (u) => (u === USCCB_RSS_URL ? rss() : fetchText(u)));
+    expect(r.lectionary).toBe('148');
+  });
+
+  it('follows Mass links in a feed entry that has no readings of its own', async () => {
+    const item = `<rss><channel><item><title>The Nativity of the Lord (Christmas)</title>
+      <link>https://bible.usccb.org/bible/readings/122525.cfm</link>
+      <description>${cheerio.load(fx('christmas-2025-12-25'))('ul.nested').first().toString().replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</description>
+      </item></channel></rss>`;
+    const r = await fetchUsccb('2025-12-25', async (u) => (u === USCCB_RSS_URL ? item : fetchText(u)));
+    expect([...new Set(r.sections.map((s) => s.mass))]).toEqual([
+      'Vigil Mass', 'Mass during the Night', 'Mass at Dawn', 'Mass during the Day',
+    ]);
+    expect(r.feast).toBe('The Nativity of the Lord (Christmas)');
+  });
 
   it('stamps fetchedAt on a normal page', async () => {
     const r = await fetchUsccb('2026-10-25', fetchText);
