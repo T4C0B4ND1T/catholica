@@ -5,6 +5,9 @@ import type { BulletinSummary, DailyReadings, ReflectionInsights } from '@/lib/t
 import { geminiModel } from './model';
 import { parseBulletinSummary, parseInsights, parseQuestions } from './parse';
 
+/** Gemini can hang for most of a minute when busy; give up sooner so a cron run stays inside its time limit. */
+const TIMEOUT_MS = 40_000;
+
 
 function promptFor(r: DailyReadings): string {
   const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
@@ -25,7 +28,7 @@ function promptFor(r: DailyReadings): string {
 export async function writeReflection(r: DailyReadings): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const res = await ai.models.generateContent({ model: geminiModel(), contents: promptFor(r) });
   const text = res.text?.trim();
   if (!text) throw new Error('Gemini returned no text');
@@ -39,7 +42,7 @@ export async function writeReflection(r: DailyReadings): Promise<string> {
 export async function writeInsights(r: DailyReadings): Promise<ReflectionInsights> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
   const prompt = [
     'From the Mass readings below, write study notes for a Catholic reader. Return JSON with exactly these keys:',
@@ -74,7 +77,7 @@ export async function writeInsights(r: DailyReadings): Promise<ReflectionInsight
 export async function writeQuestions(r: DailyReadings): Promise<string[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
   const prompt = [
     'Write questions for a Catholic reader to think and pray about while preparing for Sunday Mass, from the readings below.',
@@ -102,7 +105,7 @@ const BULLETIN_TEXT_LIMIT = 60_000;
 export async function summarizeBulletin(text: string): Promise<BulletinSummary> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const prompt = [
     'Below is the text of a Catholic parish bulletin, extracted from its PDF (layout lost, so columns may be mixed).',
     'Return JSON with exactly these keys:',
@@ -126,7 +129,7 @@ export async function summarizeBulletin(text: string): Promise<BulletinSummary> 
 export async function askCatechism(question: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const prompt = [
     'Answer the question below for a Catholic reader, based on the Catechism of the Catholic Church.',
     'Rules: at most 150 words, plain language, no headings or lists.',
