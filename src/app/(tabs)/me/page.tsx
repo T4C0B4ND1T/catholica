@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Catechism } from "@/components/me/Catechism";
 import { Bookmarks } from "@/components/me/Bookmarks";
 import { Intentions } from "@/components/me/Intentions";
@@ -38,6 +39,12 @@ export default async function MePage() {
         ) : (
           <SignedOut />
         )}
+        <Link
+          href="/prayers"
+          className="flex min-h-11 items-center justify-between rounded-md border border-border px-4 font-display text-xl transition-colors duration-200 ease-out hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          Prayer library <span aria-hidden="true">→</span>
+        </Link>
         <Catechism signedIn={signedIn} />
         <SettingsPanel signedIn={signedIn} />
       </div>

@@ -6,6 +6,9 @@ const CACHE = 'catholica-v1';
 const NAV_TIMEOUT_MS = 3000;
 // A prefetch skips a URL cached this recently (the server's Date header), so repeat app opens stay light.
 const PREFETCH_FRESH_MS = 15 * 60 * 1000;
+// Prayer pages only change with a deploy, so a prefetch refreshes them weekly at most.
+const STABLE = /^\/prayers(\/|$)/;
+const STABLE_FRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 const NEVER = [/^\/api\/me(\/|$)/, /^\/api\/cron(\/|$)/, /^\/auth(\/|$)/];
 const STALE_WHILE_REVALIDATE = [/^\/api\/readings\/[^/]+$/];
@@ -232,9 +235,9 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') return event.respondWith(page(event, url));
 });
 
-function isRecent(res) {
+function isRecent(res, ms = PREFETCH_FRESH_MS) {
   const at = Date.parse(res.headers.get('Date') || '');
-  return Number.isFinite(at) && Date.now() - at < PREFETCH_FRESH_MS;
+  return Number.isFinite(at) && Date.now() - at < ms;
 }
 
 /** Saves the static files a page needs to start (scripts, styles, fonts), found in its HTML. */
@@ -260,7 +263,7 @@ async function prefetchOne(path) {
   const isPage = !url.pathname.startsWith('/api/');
   const cached = await match(url.href);
   // A saved bulletin PDF never changes; anything else is refreshed unless it was saved moments ago.
-  if (cached && (PDF.test(url.pathname) || isRecent(cached))) return;
+  if (cached && (PDF.test(url.pathname) || isRecent(cached, STABLE.test(url.pathname) ? STABLE_FRESH_MS : undefined))) return;
   if (PDF.test(url.pathname)) {
     const pdf = await fetchPdf(url.origin + url.pathname);
     if (pdf) await storePdf(url.origin + url.pathname, pdf);

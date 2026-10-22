@@ -1,5 +1,6 @@
 import { addDays } from '@/lib/dates';
 import { comingSunday } from '@/lib/liturgical/calendar';
+import { PRAYERS } from '@/data/prayers';
 
 /** The service worker's cache. Keep in step with `CACHE` in public/sw.js. */
 export const OFFLINE_CACHE = 'catholica-v1';
@@ -18,7 +19,8 @@ export const OFFLINE_DAYS = 8;
  * What the service worker saves for offline use: the coming week's readings (with reflections),
  * the Today and Bulletin pages, the Mass page for each day of the week (bare `/mass` is today's, which the
  * service worker reads from `/mass?date=<today>`, so it is never saved on its own),
- * Sunday prep for the coming Sunday (and on a Sunday, the next one too), and the newest bulletin with its PDF. The PDF route redirects to a signed storage URL; the service worker follows it
+ * Sunday prep for the coming Sunday (and on a Sunday, the next one too), the prayer library, and the newest bulletin
+ * with its PDF. The PDF route redirects to a signed storage URL; the service worker follows it
  * and saves the file under the stable `/api/bulletins/<date>/pdf` path.
  */
 export function offlineUrls(today: string, bulletinDate: string | null): string[] {
@@ -28,6 +30,8 @@ export function offlineUrls(today: string, bulletinDate: string | null): string[
     '/',
     ...week.map((d) => `/mass?date=${d}`),
     ...[...new Set([comingSunday(today), comingSunday(addDays(today, 1))])].map((d) => `/sunday?date=${d}`),
+    '/prayers',
+    ...PRAYERS.map((p) => `/prayers/${p.slug}`),
     '/bulletin',
     ...(bulletinDate ? [`/bulletin/${bulletinDate}`, `/api/bulletins/${bulletinDate}/pdf`] : []),
   ];
