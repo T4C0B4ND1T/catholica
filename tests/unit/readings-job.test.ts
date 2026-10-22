@@ -189,4 +189,42 @@ describe('runReadingsJob', () => {
     expect(questions.save).not.toHaveBeenCalled();
     expect(deps.alert).not.toHaveBeenCalled();
   });
+
+  it('writes insights once per date, after its reflection', async () => {
+    const written = new Set<string>();
+    const insights = {
+      has: vi.fn(async (d: string) => written.has(d)),
+      write: vi.fn(async () => ({ theology: 'T', catechism: [{ paragraph: 1324, connection: 'C' }], prayer: 'P' })),
+      save: vi.fn(async (d: string) => void written.add(d)),
+    };
+    const reflected = new Set<string>();
+    const deps = setup({
+      insights,
+      hasReflection: vi.fn(async (d: string) => reflected.has(d)),
+      saveReflection: vi.fn(async (d: string) => void reflected.add(d)),
+    });
+    await runReadingsJob(deps);
+    await runReadingsJob(deps);
+    expect(insights.save).toHaveBeenCalledTimes(8);
+    expect(insights.save).toHaveBeenCalledWith('2026-10-21', expect.objectContaining({ theology: 'T' }));
+  });
+
+  it('skips insights when the reflection could not be written, and still writes questions when insights fail', async () => {
+    const insights = {
+      has: vi.fn(async () => false),
+      write: vi.fn(async () => { throw new Error('gemini down'); }),
+      save: vi.fn(async () => {}),
+    };
+    const questions = { has: vi.fn(async () => false), write: vi.fn(async () => ['Q?']), save: vi.fn(async () => {}) };
+    const deps = setup({ insights, questions, hasReflection: vi.fn(async () => true) });
+    const res = await runReadingsJob(deps);
+    expect(res.failed).toEqual([]);
+    expect(questions.save).toHaveBeenCalledWith('2026-10-25', ['Q?']);
+    expect(deps.alert).not.toHaveBeenCalled();
+
+    const noReflection = setup({ insights, hasReflection: vi.fn(async () => false), writeReflection: vi.fn(async () => { throw new Error('down'); }) });
+    insights.write.mockClear();
+    await runReadingsJob(noReflection);
+    expect(insights.write).not.toHaveBeenCalled();
+  });
 });

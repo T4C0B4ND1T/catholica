@@ -38,6 +38,19 @@ export interface Bulletin {
   fetchedAt: string;
 }
 
+/** One Catechism paragraph tied to the day's readings. The number is checked against the Catechism before saving. */
+export interface CatechismConnection {
+  paragraph: number;
+  connection: string;
+}
+
+/** The AI study notes beside the day's homiletic reflection. Shown only under an AI label. */
+export interface ReflectionInsights {
+  theology: string;
+  catechism: CatechismConnection[];
+  prayer: string;
+}
+
 /** AI summary of a bulletin's text. Shown under an AI label, with the PDF as the source of truth. */
 export interface BulletinSummary {
   massTimes: string[];

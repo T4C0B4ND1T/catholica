@@ -10,7 +10,7 @@ import { liturgicalDay } from "@/lib/liturgical/calendar";
 import { upcomingHolyDay } from "@/lib/liturgical/holy-days";
 import { saintsOfDay } from "@/lib/liturgical/saints";
 import { usccbUrl } from "@/lib/sources/usccb-url";
-import type { DailyReadings, LitColor, Season } from "@/lib/types";
+import type { DailyReadings, LitColor, Season, ReflectionInsights } from "@/lib/types";
 
 const SEASONS: Record<Season, string> = {
   advent: "Advent",
@@ -70,6 +70,7 @@ export function TodayView({
   today,
   readings,
   reflection,
+  insights = null,
   missing = "unsaved",
   children,
 }: {
@@ -77,6 +78,7 @@ export function TodayView({
   today: string;
   readings: DailyReadings | null;
   reflection: string | null;
+  insights?: ReflectionInsights | null;
   /** Shown in place of the readings when there are none. */
   missing?: MissingReason;
   /** Extra cards after the reflection (This Sunday). */
@@ -139,7 +141,7 @@ export function TodayView({
         </Link>
       </div>
 
-      {reflection && <ReflectionPanel text={reflection} />}
+      <ReflectionPanel text={reflection} insights={insights} />
 
       {children}
 
