@@ -5,7 +5,7 @@ import { formatDay } from "@/lib/dates";
 import { sectionForKind } from "@/lib/mass-options";
 import type { Bulletin, DailyReadings } from "@/lib/types";
 
-/** Monday to Saturday: the coming Sunday's feast and Gospel citation, and the newest bulletin. */
+/** Monday to Saturday: the coming Sunday's feast and Gospel citation, a link to Sunday prep, and the newest bulletin. */
 export function ThisSundayCard({
   sunday,
   readings,
@@ -27,6 +27,9 @@ export function ThisSundayCard({
           <span className="small-caps">{gospel.citation}</span>
         </p>
       )}
+      <Link href={`/sunday?date=${sunday}`} className={buttonClasses("outline", "mt-4")}>
+        Prepare for Sunday
+      </Link>
       {bulletin && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
           <p className="text-sm text-muted-foreground">Latest bulletin: {formatDay(bulletin.sundayDate)}</p>

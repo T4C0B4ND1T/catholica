@@ -1,4 +1,4 @@
-import { addDays, todayInChicago } from '@/lib/dates';
+import { addDays, dayOfWeek, todayInChicago } from '@/lib/dates';
 import type { DailyReadings } from '@/lib/types';
 
 const WINDOW_DAYS = 7;
@@ -19,6 +19,12 @@ export interface ReadingsJobDeps {
   saveReflection: (date: string, text: string) => Promise<void>;
   hasReflection: (date: string) => Promise<boolean>;
   writeReflection: (r: DailyReadings) => Promise<string>;
+  /** Sunday prep questions, written once per Sunday after its reflection. Left out, no questions are written. */
+  questions?: {
+    has: (date: string) => Promise<boolean>;
+    write: (r: DailyReadings) => Promise<string[]>;
+    save: (date: string, questions: string[]) => Promise<void>;
+  };
   logRun: (job: 'readings' | 'bulletin', status: 'ok' | 'error', message: string) => Promise<void>;
   alert: (subject: string, body: string) => Promise<void>;
   now: Date;
@@ -36,7 +42,8 @@ function errMessage(e: unknown): string {
 
 /**
  * Ensures readings (and one AI reflection each) exist for today through today + 7.
- * Each missing date gets up to three fetch attempts per run. Reflection trouble never blocks readings.
+ * Each missing date gets up to three fetch attempts per run. Sundays also get prep questions.
+ * Reflection and question trouble never blocks readings.
  */
 export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: string[]; failed: string[] }> {
   const today = todayInChicago(deps.now);
@@ -76,6 +83,10 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
       try {
         if (!(await deps.hasReflection(date))) {
           await deps.saveReflection(date, await deps.writeReflection(readings));
+        }
+        const q = deps.questions;
+        if (q && dayOfWeek(date) === 0 && !(await q.has(date))) {
+          await q.save(date, await q.write(readings));
         }
       } catch (e) {
         notes.push(`reflection ${date}: ${errMessage(e)}`);

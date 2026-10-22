@@ -87,3 +87,29 @@ export async function saveReflection(date: string, text: string, model?: string)
     .upsert({ date, text, model: model ?? geminiModel() }, { onConflict: 'date' });
   if (error) throw new Error(`saveReflection ${date}: ${error.message}`);
 }
+
+/** The Sunday prep questions for the day, or null when none are stored (or the lookup fails, so pages still render). */
+export async function getQuestions(date: string): Promise<string[] | null> {
+  try {
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.from('reflections').select('questions').eq('date', date).maybeSingle();
+    if (error) throw new Error(error.message);
+    const q = data?.questions;
+    return Array.isArray(q) && q.length > 0 ? (q as string[]) : null;
+  } catch (e) {
+    console.error('getQuestions failed', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+export async function hasQuestions(date: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().from('reflections').select('questions').eq('date', date).maybeSingle();
+  if (error) throw new Error(`hasQuestions ${date}: ${error.message}`);
+  return Array.isArray(data?.questions) && data.questions.length > 0;
+}
+
+/** Stores the questions on the day's reflection row, which must already exist. */
+export async function saveQuestions(date: string, questions: string[]): Promise<void> {
+  const { error } = await createAdminClient().from('reflections').update({ questions }).eq('date', date);
+  if (error) throw new Error(`saveQuestions ${date}: ${error.message}`);
+}

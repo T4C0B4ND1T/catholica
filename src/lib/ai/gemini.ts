@@ -2,6 +2,7 @@ import 'server-only';
 import { GoogleGenAI } from '@google/genai';
 import type { DailyReadings } from '@/lib/types';
 import { geminiModel } from './model';
+import { parseQuestions } from './parse';
 
 
 function promptFor(r: DailyReadings): string {
@@ -28,6 +29,31 @@ export async function writeReflection(r: DailyReadings): Promise<string> {
   const text = res.text?.trim();
   if (!text) throw new Error('Gemini returned no text');
   return text;
+}
+
+/** Three or four questions to think about before Sunday Mass. Stored beside the reflection, shown under an AI label. */
+export async function writeQuestions(r: DailyReadings): Promise<string[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  const ai = new GoogleGenAI({ apiKey });
+  const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
+  const prompt = [
+    'Write questions for a Catholic reader to think and pray about while preparing for Sunday Mass, from the readings below.',
+    'Rules: three or four questions, each one sentence, plain language, second person.',
+    'Each question should point to something specific in the readings. Quote only words that appear in them.',
+    'Output a JSON array of strings and nothing else.',
+    '',
+    `Date: ${r.date}`,
+    r.feast ? `Feast: ${r.feast}` : '',
+    '',
+    body,
+  ].join('\n');
+  const res = await ai.models.generateContent({
+    model: geminiModel(),
+    contents: prompt,
+    config: { responseMimeType: 'application/json' },
+  });
+  return parseQuestions(res.text ?? '');
 }
 
 /** AI answer to a Catechism question. Shown only under an "AI answer" label, never as Catechism text. */

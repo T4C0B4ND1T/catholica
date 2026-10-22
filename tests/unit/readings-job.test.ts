@@ -161,4 +161,32 @@ describe('runReadingsJob', () => {
     expect(vi.mocked(deps.getReadings).mock.calls[0][0]).toBe('2026-10-21');
     expect(vi.mocked(deps.getReadings).mock.calls).toHaveLength(8);
   });
+
+  it('writes prep questions once, for the Sunday only', async () => {
+    const asked = new Set<string>();
+    const questions = {
+      has: vi.fn(async (d: string) => asked.has(d)),
+      write: vi.fn(async () => ['Q1?', 'Q2?']),
+      save: vi.fn(async (d: string) => void asked.add(d)),
+    };
+    const deps = setup({ questions });
+    await runReadingsJob(deps);
+    await runReadingsJob(deps);
+    expect(questions.save).toHaveBeenCalledTimes(1);
+    expect(questions.save).toHaveBeenCalledWith('2026-10-25', ['Q1?', 'Q2?']);
+  });
+
+  it('keeps readings and does not alert when the questions fail', async () => {
+    const questions = {
+      has: vi.fn(async () => false),
+      write: vi.fn(async () => { throw new Error('gemini down'); }),
+      save: vi.fn(async () => {}),
+    };
+    const deps = setup({ questions });
+    const res = await runReadingsJob(deps);
+    expect(res.failed).toEqual([]);
+    expect(deps.saveReflection).toHaveBeenCalledTimes(8);
+    expect(questions.save).not.toHaveBeenCalled();
+    expect(deps.alert).not.toHaveBeenCalled();
+  });
 });
