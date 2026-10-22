@@ -8,7 +8,7 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 import { buttonClasses } from "@/components/ui/Button";
 import { addDays, dateParam, formatDay, todayInChicago } from "@/lib/dates";
 import { latestBulletin } from "@/lib/db/bulletins";
-import { getQuestions, getReadings, getReflection } from "@/lib/db/readings";
+import { getInsights, getQuestions, getReadings, getReflection } from "@/lib/db/readings";
 import { comingSunday } from "@/lib/liturgical/calendar";
 import { defaultMass, massSections } from "@/lib/mass-options";
 import { usccbUrl } from "@/lib/sources/usccb-url";
@@ -28,9 +28,10 @@ async function safeLatestBulletin(): Promise<Bulletin | null> {
 /** Everything for preparing for one Sunday: its readings, the AI reflection and questions, a note, and the bulletin. */
 export default async function SundayPrepPage({ searchParams }: { searchParams: Promise<{ date?: string | string[] }> }) {
   const sunday = comingSunday(dateParam((await searchParams).date) ?? todayInChicago());
-  const [readings, reflection, questions, bulletin] = await Promise.all([
+  const [readings, reflection, insights, questions, bulletin] = await Promise.all([
     getReadings(sunday),
     getReflection(sunday),
+    getInsights(sunday),
     getQuestions(sunday),
     safeLatestBulletin(),
   ]);
@@ -70,7 +71,7 @@ export default async function SundayPrepPage({ searchParams }: { searchParams: P
         </Card>
       )}
 
-      {reflection && <ReflectionPanel text={reflection} />}
+      <ReflectionPanel text={reflection} insights={insights} />
 
       {questions && (
         <section aria-labelledby="questions-title" className="rounded-lg border border-border bg-card px-6 py-4" data-testid="prep-questions">

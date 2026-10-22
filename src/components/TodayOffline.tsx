@@ -4,9 +4,15 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { TodayView, type MissingReason } from "@/components/TodayView";
 import { dateParam, todayInChicago } from "@/lib/dates";
-import type { DailyReadings } from "@/lib/types";
+import type { DailyReadings, ReflectionInsights } from "@/lib/types";
 
-type Loaded = { date: string; readings: DailyReadings | null; reflection: string | null; missing: MissingReason };
+type Loaded = {
+  date: string;
+  readings: DailyReadings | null;
+  reflection: string | null;
+  insights?: ReflectionInsights | null;
+  missing: MissingReason;
+};
 
 const noSubscribe = () => () => {};
 
@@ -32,8 +38,12 @@ export function TodayOffline({ renderedDate, children }: { renderedDate: string;
     fetch(`/api/readings/${wanted}`)
       .then(async (res) => {
         if (!res.ok) return done({ date: wanted, readings: null, reflection: null, missing: "failed" });
-        const body = (await res.json()) as { readings: DailyReadings | null; reflection: string | null };
-        done({ date: wanted, readings: body.readings, reflection: body.reflection, missing: "unsaved" });
+        const body = (await res.json()) as {
+          readings: DailyReadings | null;
+          reflection: string | null;
+          insights?: ReflectionInsights | null;
+        };
+        done({ date: wanted, readings: body.readings, reflection: body.reflection, insights: body.insights, missing: "unsaved" });
       })
       // No network and nothing cached for this day.
       .catch(() => done({ date: wanted, readings: null, reflection: null, missing: "offline" }));
@@ -50,6 +60,7 @@ export function TodayOffline({ renderedDate, children }: { renderedDate: string;
       today={clientToday ?? wanted}
       readings={current?.readings ?? null}
       reflection={current?.reflection ?? null}
+      insights={current?.insights ?? null}
       missing={current?.missing ?? "loading"}
     />
   );

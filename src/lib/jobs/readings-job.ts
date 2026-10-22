@@ -1,5 +1,5 @@
 import { addDays, dayOfWeek, todayInChicago } from '@/lib/dates';
-import type { DailyReadings } from '@/lib/types';
+import type { DailyReadings, ReflectionInsights } from '@/lib/types';
 
 const WINDOW_DAYS = 7;
 const MAX_ATTEMPTS = 3;
@@ -25,6 +25,12 @@ export interface ReadingsJobDeps {
     write: (r: DailyReadings) => Promise<string[]>;
     save: (date: string, questions: string[]) => Promise<void>;
   };
+  /** The theology insight, Catechism connections and prayer prompt, written once per date after its reflection. */
+  insights?: {
+    has: (date: string) => Promise<boolean>;
+    write: (r: DailyReadings) => Promise<ReflectionInsights>;
+    save: (date: string, insights: ReflectionInsights) => Promise<void>;
+  };
   logRun: (job: 'readings' | 'bulletin', status: 'ok' | 'error', message: string) => Promise<void>;
   alert: (subject: string, body: string) => Promise<void>;
   now: Date;
@@ -41,9 +47,9 @@ function errMessage(e: unknown): string {
 }
 
 /**
- * Ensures readings (and one AI reflection each) exist for today through today + 7.
+ * Ensures readings (and one AI reflection and set of insights each) exist for today through today + 7.
  * Each missing date gets up to three fetch attempts per run. Sundays also get prep questions.
- * Reflection and question trouble never blocks readings.
+ * Reflection, insight and question trouble never blocks readings.
  */
 export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: string[]; failed: string[] }> {
   const today = todayInChicago(deps.now);
@@ -83,6 +89,15 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
       try {
         if (!(await deps.hasReflection(date))) {
           await deps.saveReflection(date, await deps.writeReflection(readings));
+        }
+        // The insights go on the reflection row, so they wait for a reflection; their trouble never stops the questions.
+        const ins = deps.insights;
+        if (ins && (await deps.hasReflection(date)) && !(await ins.has(date))) {
+          try {
+            await ins.save(date, await ins.write(readings));
+          } catch (e) {
+            notes.push(`insights ${date}: ${errMessage(e)}`);
+          }
         }
         const q = deps.questions;
         if (q && dayOfWeek(date) === 0 && !(await q.has(date))) {

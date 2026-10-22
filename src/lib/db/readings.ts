@@ -1,5 +1,5 @@
 import 'server-only';
-import type { DailyReadings, ReadingSection } from '@/lib/types';
+import type { DailyReadings, ReadingSection, ReflectionInsights } from '@/lib/types';
 import { geminiModel } from '@/lib/ai/model';
 import { liturgicalDay } from '@/lib/liturgical/calendar';
 import { createAdminClient } from './admin';
@@ -112,4 +112,29 @@ export async function hasQuestions(date: string): Promise<boolean> {
 export async function saveQuestions(date: string, questions: string[]): Promise<void> {
   const { error } = await createAdminClient().from('reflections').update({ questions }).eq('date', date);
   if (error) throw new Error(`saveQuestions ${date}: ${error.message}`);
+}
+
+/** The day's AI insights, or null when none are stored (or the lookup fails, so pages still render). */
+export async function getInsights(date: string): Promise<ReflectionInsights | null> {
+  try {
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.from('reflections').select('insights').eq('date', date).maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data?.insights as ReflectionInsights | null) ?? null;
+  } catch (e) {
+    console.error('getInsights failed', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+export async function hasInsights(date: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().from('reflections').select('insights').eq('date', date).maybeSingle();
+  if (error) throw new Error(`hasInsights ${date}: ${error.message}`);
+  return data?.insights != null;
+}
+
+/** Stores the insights on the day's reflection row, which must already exist. */
+export async function saveInsights(date: string, insights: ReflectionInsights): Promise<void> {
+  const { error } = await createAdminClient().from('reflections').update({ insights }).eq('date', date);
+  if (error) throw new Error(`saveInsights ${date}: ${error.message}`);
 }
