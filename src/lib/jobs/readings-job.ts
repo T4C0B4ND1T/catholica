@@ -3,8 +3,11 @@ import type { DailyReadings } from '@/lib/types';
 
 const WINDOW_DAYS = 7;
 const MAX_ATTEMPTS = 3;
-/** Failures for today or tomorrow are urgent enough to email. */
-const URGENT_DAYS = 1;
+/**
+ * Only a failure for today is urgent enough to email. Future days come from USCCB's pages, which challenge Vercel's
+ * servers, and each day turns up in the feed on the morning itself.
+ */
+const URGENT_DAYS = 0;
 /** Waits before the 2nd and 3rd attempts. */
 const BACKOFF_MS = [1000, 3000];
 const DEFAULT_BUDGET_MS = 240_000;

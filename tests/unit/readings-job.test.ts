@@ -79,7 +79,7 @@ describe('runReadingsJob', () => {
     expect(deps.alert).toHaveBeenCalledTimes(1);
   });
 
-  it('alerts when only tomorrow fails', async () => {
+  it('does not alert when only tomorrow fails (the feed has no future days)', async () => {
     const deps = setup({
       fetchUsccb: vi.fn(async (d: string) => {
         if (d === '2026-10-22') throw new Error('down');
@@ -87,7 +87,7 @@ describe('runReadingsJob', () => {
       }),
     });
     await runReadingsJob(deps);
-    expect(deps.alert).toHaveBeenCalledTimes(1);
+    expect(deps.alert).not.toHaveBeenCalled();
   });
 
   it('does not alert when only day +5 fails', async () => {
