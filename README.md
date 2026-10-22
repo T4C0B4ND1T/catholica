@@ -60,6 +60,9 @@ through the admin API on the local stack only.
   best effort from the pages; `/api/cron/bulletin` probes
   recent Sundays at `files.ecatholic.com/17181/bulletins/YYYYMMDD.pdf` (the parish list page is behind a Cloudflare
   challenge). Both need `Authorization: Bearer $CRON_SECRET`, which Vercel sends automatically.
+- When USCCB's pages block the site's servers, fill a range of days from any machine where they load:
+  `SITE_URL=https://<domain> CRON_SECRET=... pnpm tsx scripts/seed-readings.ts --from 2026-09-01 --to 2027-09-30`.
+  It posts to `/api/cron/readings/import` (cron secret, 31 days per request, saved days are skipped).
 - Seed after the first deploy:
 
 ```bash
