@@ -227,4 +227,19 @@ describe('runReadingsJob', () => {
     await runReadingsJob(noReflection);
     expect(insights.write).not.toHaveBeenCalled();
   });
+
+  it('starts no AI step once the time budget is spent, but still saves the readings', async () => {
+    let t = 0;
+    const deps = setup({
+      clock: () => t,
+      budgetMs: 100,
+      fetchUsccb: vi.fn(async (d: string) => {
+        t += 101; // the fetch itself uses up the budget
+        return mk(d);
+      }),
+    });
+    const res = await runReadingsJob(deps);
+    expect(res.saved).toEqual(['2026-10-21']);
+    expect(deps.writeReflection).not.toHaveBeenCalled();
+  });
 });

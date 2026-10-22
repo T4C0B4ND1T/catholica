@@ -10,7 +10,7 @@ const MAX_ATTEMPTS = 3;
 const URGENT_DAYS = 0;
 /** Waits before the 2nd and 3rd attempts. */
 const BACKOFF_MS = [1000, 3000];
-const DEFAULT_BUDGET_MS = 240_000;
+const DEFAULT_BUDGET_MS = 200_000;
 
 export interface ReadingsJobDeps {
   fetchUsccb: (date: string) => Promise<DailyReadings>;
@@ -38,7 +38,7 @@ export interface ReadingsJobDeps {
   sleep?: (ms: number) => Promise<void>;
   /** Monotonic-ish clock in ms (default Date.now), used for the time budget. */
   clock?: () => number;
-  /** Stop starting new dates after this many ms (default 240s; the route allows 300s). */
+  /** Stop starting new dates after this many ms (default 200s; the route allows 300s, and an AI step started just before the budget runs out can take another minute). */
   budgetMs?: number;
 }
 
@@ -87,12 +87,14 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
       }
 
       try {
+        // Each AI step can take up to 40s, so none starts once the budget is spent; the next run picks them up.
+        if (clock() - started > budgetMs) throw new Error('AI skipped, time budget exceeded');
         if (!(await deps.hasReflection(date))) {
           await deps.saveReflection(date, await deps.writeReflection(readings));
         }
         // The insights go on the reflection row, so they wait for a reflection; their trouble never stops the questions.
         const ins = deps.insights;
-        if (ins && (await deps.hasReflection(date)) && !(await ins.has(date))) {
+        if (ins && clock() - started <= budgetMs && (await deps.hasReflection(date)) && !(await ins.has(date))) {
           try {
             await ins.save(date, await ins.write(readings));
           } catch (e) {
@@ -100,7 +102,7 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
           }
         }
         const q = deps.questions;
-        if (q && dayOfWeek(date) === 0 && !(await q.has(date))) {
+        if (q && clock() - started <= budgetMs && dayOfWeek(date) === 0 && !(await q.has(date))) {
           await q.save(date, await q.write(readings));
         }
       } catch (e) {
