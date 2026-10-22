@@ -1,8 +1,8 @@
 import 'server-only';
 import { GoogleGenAI } from '@google/genai';
-import type { DailyReadings } from '@/lib/types';
+import type { BulletinSummary, DailyReadings } from '@/lib/types';
 import { geminiModel } from './model';
-import { parseQuestions } from './parse';
+import { parseBulletinSummary, parseQuestions } from './parse';
 
 
 function promptFor(r: DailyReadings): string {
@@ -54,6 +54,33 @@ export async function writeQuestions(r: DailyReadings): Promise<string[]> {
     config: { responseMimeType: 'application/json' },
   });
   return parseQuestions(res.text ?? '');
+}
+
+/** Bulletin text past this is mostly advertisers; the schedule and news come first. */
+const BULLETIN_TEXT_LIMIT = 60_000;
+
+/** Mass and confession times and this week's announcements, read by AI from the bulletin's extracted text. */
+export async function summarizeBulletin(text: string): Promise<BulletinSummary> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = [
+    'Below is the text of a Catholic parish bulletin, extracted from its PDF (layout lost, so columns may be mixed).',
+    'Return JSON with exactly these keys:',
+    '"massTimes": the weekend and weekday Mass schedule, one string per line, like "Saturday 4:00 PM (Vigil)".',
+    '"confession": confession times, one string per line.',
+    '"announcements": this week\'s news and events (not advertisements, not staff lists), at most 8, each {"title", "text"},',
+    'with text of one or two sentences that keeps any date, time and place exactly as written.',
+    'Use only what the text says. Leave a list empty when the text does not have it.',
+    '',
+    text.slice(0, BULLETIN_TEXT_LIMIT),
+  ].join('\n');
+  const res = await ai.models.generateContent({
+    model: geminiModel(),
+    contents: prompt,
+    config: { responseMimeType: 'application/json' },
+  });
+  return parseBulletinSummary(res.text ?? '');
 }
 
 /** AI answer to a Catechism question. Shown only under an "AI answer" label, never as Catechism text. */

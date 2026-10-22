@@ -1,6 +1,6 @@
 import 'server-only';
 import { cache } from 'react';
-import type { Bulletin } from '@/lib/types';
+import type { Bulletin, BulletinSummary } from '@/lib/types';
 import { createAdminClient } from './admin';
 import { createServerClient } from './server';
 
@@ -133,4 +133,59 @@ export async function saveBulletin(meta: BulletinSaveMeta, bytes: Uint8Array): P
     fetched_at: new Date().toISOString(),
   });
   if (error) throw new Error(`saveBulletin row ${meta.sundayDate}: ${error.message}`);
+}
+
+/** The AI summary for a bulletin, or null when there is none (or the lookup fails, so the page still renders). */
+export async function getBulletinSummary(date: string): Promise<BulletinSummary | null> {
+  try {
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.from('bulletins').select('summary').eq('sunday_date', date).maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data?.summary as BulletinSummary | null) ?? null;
+  } catch (e) {
+    console.error('getBulletinSummary failed', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** Newest bulletins that have text but no summary yet. Service role. */
+export async function bulletinsMissingSummary(limit: number): Promise<{ sundayDate: string; text: string }[]> {
+  const { data, error } = await createAdminClient()
+    .from('bulletins')
+    .select('sunday_date, text')
+    .is('summary', null)
+    .not('text', 'is', null)
+    .order('sunday_date', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`bulletinsMissingSummary: ${error.message}`);
+  return (data ?? []).map((r) => ({ sundayDate: r.sunday_date, text: r.text ?? '' })).filter((r) => r.text.trim() !== '');
+}
+
+export async function saveBulletinSummary(date: string, summary: BulletinSummary): Promise<void> {
+  const { error } = await createAdminClient().from('bulletins').update({ summary }).eq('sunday_date', date);
+  if (error) throw new Error(`saveBulletinSummary ${date}: ${error.message}`);
+}
+
+/** Bulletins before `before` whose PDF is still in storage. Service role. */
+export async function storedPdfsBefore(before: string): Promise<{ sundayDate: string; storagePath: string }[]> {
+  const { data, error } = await createAdminClient()
+    .from('bulletins')
+    .select('sunday_date, storage_path')
+    .lt('sunday_date', before)
+    .not('storage_path', 'is', null)
+    .order('sunday_date');
+  if (error) throw new Error(`storedPdfsBefore: ${error.message}`);
+  return (data ?? []).map((r) => ({ sundayDate: r.sunday_date, storagePath: r.storage_path as string }));
+}
+
+/**
+ * Deletes a bulletin's stored PDF and clears its storage_path. The row keeps its text and summary, so search still
+ * finds it, and its source_url still points at the parish's copy.
+ */
+export async function dropStoredPdf(date: string, storagePath: string): Promise<void> {
+  const admin = createAdminClient();
+  const { error: rmError } = await admin.storage.from(BUCKET).remove([storagePath]);
+  if (rmError) throw new Error(`dropStoredPdf ${date}: ${rmError.message}`);
+  const { error } = await admin.from('bulletins').update({ storage_path: null }).eq('sunday_date', date);
+  if (error) throw new Error(`dropStoredPdf row ${date}: ${error.message}`);
 }

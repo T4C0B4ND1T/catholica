@@ -147,4 +147,54 @@ describe('runBulletinJob', () => {
     const deps = setup({ since: '2026-10-04', fetchPdf: vi.fn(async (d: string) => { if (d === '2026-10-11') throw new Error('x'); return BYTES; }) });
     expect((await runBulletinJob(deps)).failures).toBe(1);
   });
+
+  it('summarizes bulletins missing a summary; a failed one is noted and the run stays ok', async () => {
+    const summaries = {
+      missing: vi.fn(async () => [
+        { sundayDate: '2026-10-18', text: 'good' },
+        { sundayDate: '2026-10-11', text: 'bad' },
+      ]),
+      summarize: vi.fn(async (t: string) => {
+        if (t === 'bad') throw new Error('gemini down');
+        return { massTimes: ['Sunday 9:00 AM'], confession: [], announcements: [] };
+      }),
+      save: vi.fn(async () => {}),
+    };
+    const deps = setup({ summaries, since: '2026-10-18' }, ['2026-10-18']);
+    const res = await runBulletinJob(deps);
+    expect(summaries.missing).toHaveBeenCalledWith(3);
+    expect(summaries.save).toHaveBeenCalledTimes(1);
+    expect(res.summarized).toEqual(['2026-10-18']);
+    expect(res.status).toBe('ok');
+    expect(deps.alert).not.toHaveBeenCalled();
+    expect(vi.mocked(deps.logRun).mock.calls[0][2]).toMatch(/summary 2026-10-11: gemini down/);
+  });
+
+  it('deletes stored PDFs older than 12 weeks before the current Sunday', async () => {
+    const prune = {
+      storedBefore: vi.fn(async () => [{ sundayDate: '2026-07-19', storagePath: '2026-07-19.pdf' }]),
+      drop: vi.fn(async () => {}),
+    };
+    const deps = setup({ prune, since: '2026-10-18' }, ['2026-10-18']);
+    const res = await runBulletinJob(deps);
+    expect(prune.storedBefore).toHaveBeenCalledWith('2026-07-26');
+    expect(prune.drop).toHaveBeenCalledWith('2026-07-19', '2026-07-19.pdf');
+    expect(res.pruned).toEqual(['2026-07-19']);
+    expect(res.status).toBe('ok');
+  });
+
+  it('keeps going when deleting an old PDF fails', async () => {
+    const prune = {
+      storedBefore: vi.fn(async () => [
+        { sundayDate: '2026-07-12', storagePath: 'a.pdf' },
+        { sundayDate: '2026-07-19', storagePath: 'b.pdf' },
+      ]),
+      drop: vi.fn(async (d: string) => {
+        if (d === '2026-07-12') throw new Error('storage down');
+      }),
+    };
+    const res = await runBulletinJob(setup({ prune, since: '2026-10-18' }, ['2026-10-18']));
+    expect(res.pruned).toEqual(['2026-07-19']);
+    expect(res.status).toBe('ok');
+  });
 });

@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { BulletinSummaryCard } from '@/components/BulletinSummaryCard';
 import { PdfViewer } from '@/components/PdfViewer';
 import { validBulletinDate } from '@/lib/bulletin-text';
 import { formatDay } from '@/lib/dates';
-import { getBulletin } from '@/lib/db/bulletins';
+import { getBulletin, getBulletinSummary } from '@/lib/db/bulletins';
 import type { Bulletin } from '@/lib/types';
 
 export default async function BulletinViewerPage({ params }: { params: Promise<{ date: string }> }) {
@@ -11,12 +12,15 @@ export default async function BulletinViewerPage({ params }: { params: Promise<{
   if (!validBulletinDate(date)) notFound();
 
   let bulletin: Bulletin | null = null;
+  const summaryLookup = getBulletinSummary(date);
   try {
     bulletin = await getBulletin(date);
   } catch (e) {
     console.error('getBulletin failed', e instanceof Error ? e.message : e);
   }
   if (!bulletin) notFound();
+  const summary = await summaryLookup;
+  const source = bulletin.sourceUrl || 'https://stanselmparish.org/bulletins';
 
   return (
     <>
@@ -29,10 +33,26 @@ export default async function BulletinViewerPage({ params }: { params: Promise<{
       <h1 className="mt-2 mb-6 text-center font-display text-[2rem] leading-[1.1] tracking-[-0.02em]">
         {formatDay(date)}
       </h1>
-      <PdfViewer src={`/api/bulletins/${date}/pdf`} title={`Bulletin for ${formatDay(date)}`} />
+      {summary && (
+        <div className="mb-6">
+          <BulletinSummaryCard summary={summary} />
+        </div>
+      )}
+      {bulletin.storagePath ? (
+        <PdfViewer src={`/api/bulletins/${date}/pdf`} title={`Bulletin for ${formatDay(date)}`} />
+      ) : (
+        // Older PDFs are deleted to stay inside free storage; the parish still hosts its copy.
+        <p data-testid="pdf-not-stored" className="text-center text-muted-foreground">
+          This older bulletin is no longer saved in the app.{' '}
+          <a href={source} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline decoration-accent underline-offset-4">
+            Open it from St. Anselm
+          </a>
+          .
+        </p>
+      )}
       <p className="mt-4 text-center text-sm">
         <a
-          href={bulletin.sourceUrl || 'https://stanselmparish.org/bulletins'}
+          href={source}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex min-h-11 items-center text-muted-foreground underline decoration-accent underline-offset-4"
