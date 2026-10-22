@@ -2,7 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({ runBulletinJob: vi.fn() }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/db/bulletins', () => ({ hasBulletin: vi.fn(), newestBulletinDate: vi.fn(), saveBulletin: vi.fn() }));
+vi.mock('@/lib/db/bulletins', () => ({
+  bulletinsMissingSummary: vi.fn(),
+  dropStoredPdf: vi.fn(),
+  hasBulletin: vi.fn(),
+  newestBulletinDate: vi.fn(),
+  saveBulletin: vi.fn(),
+  saveBulletinSummary: vi.fn(),
+  storedPdfsBefore: vi.fn(),
+}));
+vi.mock('@/lib/ai/gemini', () => ({ summarizeBulletin: vi.fn() }));
 vi.mock('@/lib/db/jobs', () => ({ logRun: vi.fn() }));
 vi.mock('@/lib/jobs/alert', () => ({ sendAlert: vi.fn() }));
 vi.mock('@/lib/sources/bulletins', () => ({ bulletinUrl: vi.fn(), extractPdfText: vi.fn(), fetchBulletinPdf: vi.fn() }));

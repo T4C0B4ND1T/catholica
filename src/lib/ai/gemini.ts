@@ -1,7 +1,8 @@
 import 'server-only';
 import { GoogleGenAI } from '@google/genai';
-import type { DailyReadings } from '@/lib/types';
+import type { BulletinSummary, DailyReadings } from '@/lib/types';
 import { geminiModel } from './model';
+import { parseBulletinSummary, parseQuestions } from './parse';
 
 
 function promptFor(r: DailyReadings): string {
@@ -28,6 +29,58 @@ export async function writeReflection(r: DailyReadings): Promise<string> {
   const text = res.text?.trim();
   if (!text) throw new Error('Gemini returned no text');
   return text;
+}
+
+/** Three or four questions to think about before Sunday Mass. Stored beside the reflection, shown under an AI label. */
+export async function writeQuestions(r: DailyReadings): Promise<string[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  const ai = new GoogleGenAI({ apiKey });
+  const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
+  const prompt = [
+    'Write questions for a Catholic reader to think and pray about while preparing for Sunday Mass, from the readings below.',
+    'Rules: three or four questions, each one sentence, plain language, second person.',
+    'Each question should point to something specific in the readings. Quote only words that appear in them.',
+    'Output a JSON array of strings and nothing else.',
+    '',
+    `Date: ${r.date}`,
+    r.feast ? `Feast: ${r.feast}` : '',
+    '',
+    body,
+  ].join('\n');
+  const res = await ai.models.generateContent({
+    model: geminiModel(),
+    contents: prompt,
+    config: { responseMimeType: 'application/json' },
+  });
+  return parseQuestions(res.text ?? '');
+}
+
+/** Bulletin text past this is mostly advertisers; the schedule and news come first. */
+const BULLETIN_TEXT_LIMIT = 60_000;
+
+/** Mass and confession times and this week's announcements, read by AI from the bulletin's extracted text. */
+export async function summarizeBulletin(text: string): Promise<BulletinSummary> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = [
+    'Below is the text of a Catholic parish bulletin, extracted from its PDF (layout lost, so columns may be mixed).',
+    'Return JSON with exactly these keys:',
+    '"massTimes": the weekend and weekday Mass schedule, one string per line, like "Saturday 4:00 PM (Vigil)".',
+    '"confession": confession times, one string per line.',
+    '"announcements": this week\'s news and events (not advertisements, not staff lists), at most 8, each {"title", "text"},',
+    'with text of one or two sentences that keeps any date, time and place exactly as written.',
+    'Use only what the text says. Leave a list empty when the text does not have it.',
+    '',
+    text.slice(0, BULLETIN_TEXT_LIMIT),
+  ].join('\n');
+  const res = await ai.models.generateContent({
+    model: geminiModel(),
+    contents: prompt,
+    config: { responseMimeType: 'application/json' },
+  });
+  return parseBulletinSummary(res.text ?? '');
 }
 
 /** AI answer to a Catechism question. Shown only under an "AI answer" label, never as Catechism text. */

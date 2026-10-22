@@ -37,3 +37,10 @@ export interface Bulletin {
   pageCount: number;
   fetchedAt: string;
 }
+
+/** AI summary of a bulletin's text. Shown under an AI label, with the PDF as the source of truth. */
+export interface BulletinSummary {
+  massTimes: string[];
+  confession: string[];
+  announcements: { title: string; text: string }[];
+}

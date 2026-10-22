@@ -9,6 +9,8 @@ const seeded = Boolean(url && serviceKey);
 const SUNDAY = '2099-01-04';
 const PATH = `e2e-synthetic/${SUNDAY}.pdf`;
 const BUCKET = 'bulletins';
+// An old bulletin whose PDF was deleted by the 12-week cleanup: row and text kept, storage_path null.
+const PRUNED = '2097-01-06';
 
 /** A minimal hand-built, valid one-page PDF. */
 function tinyPdf(): Buffer {
@@ -46,13 +48,26 @@ test.describe('Bulletin tab', () => {
       storage_path: PATH,
       page_count: 1,
       text: 'SYNTHETIC TEST BULLETIN. Join us for the feast of Saint Anselm. <script>alert(1)</script>',
+      summary: {
+        massTimes: ['Saturday 4:00 PM (synthetic)'],
+        confession: ['Saturday 3:00 PM (synthetic)'],
+        announcements: [{ title: 'Synthetic festival', text: 'Not a real event.' }],
+      },
     });
     if (error) throw error;
+    const pruned = await admin.from('bulletins').upsert({
+      sunday_date: PRUNED,
+      source_url: 'https://example.invalid/synthetic-old-bulletin.pdf',
+      storage_path: null,
+      page_count: 1,
+      text: 'SYNTHETIC OLD BULLETIN',
+    });
+    if (pruned.error) throw pruned.error;
   });
 
   test.afterAll(async () => {
     if (!admin) return;
-    await admin.from('bulletins').delete().eq('sunday_date', SUNDAY);
+    await admin.from('bulletins').delete().in('sunday_date', [SUNDAY, PRUNED]);
     await admin.storage.from(BUCKET).remove([PATH]);
   });
 
@@ -88,6 +103,23 @@ test.describe('Bulletin tab', () => {
     expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
     // Followed as a browser would, the same path ends at the PDF.
     expect((await (await request.get(`/api/bulletins/${SUNDAY}/pdf`)).body()).subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  test('seeded: the AI summary shows above the PDF, and an old bulletin links to the parish copy', async ({ page, request }) => {
+    test.skip(!seeded, 'needs SUPABASE_TEST_URL and SUPABASE_TEST_SERVICE_KEY');
+    await page.goto(`/bulletin/${SUNDAY}`);
+    const summary = page.getByTestId('bulletin-summary');
+    await expect(summary).toContainText('Summarized by AI');
+    await expect(summary).toContainText('Saturday 4:00 PM (synthetic)');
+    await expect(summary).toContainText('Synthetic festival');
+
+    await page.goto(`/bulletin/${PRUNED}`);
+    await expect(page.locator('iframe')).toHaveCount(0);
+    await expect(page.getByTestId('pdf-not-stored').getByRole('link', { name: 'Open it from St. Anselm' })).toHaveAttribute(
+      'href',
+      'https://example.invalid/synthetic-old-bulletin.pdf',
+    );
+    expect((await request.get(`/api/bulletins/${PRUNED}/pdf`)).status()).toBe(404);
   });
 
   test('search API returns empty for short queries', async ({ request }) => {

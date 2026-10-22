@@ -6,6 +6,9 @@ const CACHE = 'catholica-v1';
 const NAV_TIMEOUT_MS = 3000;
 // A prefetch skips a URL cached this recently (the server's Date header), so repeat app opens stay light.
 const PREFETCH_FRESH_MS = 15 * 60 * 1000;
+// Prayer pages only change with a deploy, so a prefetch refreshes them weekly at most.
+const STABLE = /^\/prayers(\/|$)/;
+const STABLE_FRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 const NEVER = [/^\/api\/me(\/|$)/, /^\/api\/cron(\/|$)/, /^\/auth(\/|$)/];
 const STALE_WHILE_REVALIDATE = [/^\/api\/readings\/[^/]+$/];
@@ -74,12 +77,19 @@ function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 }
 
-/** A plain page for a Mass date with nothing saved: never another day's scripture. */
-function notSavedPage(date) {
+/** The date itself if a Sunday, else the next Sunday (as comingSunday in the app). */
+function comingSunday(date) {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + ((7 - d.getUTCDay()) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
+/** A plain page for a Mass or Sunday prep date with nothing saved: never another day's scripture. */
+function notSavedPage(date, title = 'Order of the Mass') {
   const href = escapeHtml(usccbUrl(date));
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>Catholica</title></head>
 <body style="font-family: system-ui, sans-serif; max-width: 34em; margin: 0 auto; padding: 32px 16px; line-height: 1.6; text-align: center">
-<h1 style="font-family: Georgia, serif; font-weight: normal">Order of the Mass</h1>
+<h1 style="font-family: Georgia, serif; font-weight: normal">${escapeHtml(title)}</h1>
 <p data-testid="no-readings">Not saved for offline. Connect to load, or <a href="${href}" style="display: inline-flex; min-height: 44px; align-items: center">open USCCB</a>.</p>
 <p><a href="/" style="display: inline-flex; min-height: 44px; align-items: center">Back to Today</a></p>
 </body></html>`;
@@ -89,11 +99,13 @@ function notSavedPage(date) {
 /**
  * The cache key for a page. Bare `/mass` means today's Mass, so it is always read and saved as
  * `/mass?date=<today>`: a copy saved under `/mass` on an earlier day would show that day's scripture.
+ * Bare `/sunday` likewise means the coming Sunday.
  */
 function pageKey(url) {
-  if (url.pathname === '/mass' && !url.searchParams.has('date')) {
+  if ((url.pathname === '/mass' || url.pathname === '/sunday') && !url.searchParams.has('date')) {
     const dated = new URL(url.href);
-    dated.searchParams.set('date', todayInChicago());
+    const today = todayInChicago();
+    dated.searchParams.set('date', url.pathname === '/sunday' ? comingSunday(today) : today);
     return dated.href;
   }
   return url.href;
@@ -102,16 +114,18 @@ function pageKey(url) {
 /**
  * The page to show when the network is unreachable.
  * - Exact URL first, always (bare `/mass` counts as `/mass?date=<today>`).
- * - `/mass?date=X`: nothing else (another day's Mass would show the wrong scripture), so a plain "not saved" page.
+ * - `/mass?date=X` and `/sunday?date=X`: nothing else (another day would show the wrong scripture), so a plain
+ *   "not saved" page.
  * - Anything else, including `/?date=X`: the `/` shell. The Today page then re-renders itself from the cached
  *   `/api/readings/X`, or says "Not saved for offline", so it never shows another day either.
  */
 async function offlinePage(url) {
   const exact = await match(pageKey(url));
   if (exact) return exact;
-  if (url.pathname === '/mass') {
+  if (url.pathname === '/mass' || url.pathname === '/sunday') {
     const date = url.searchParams.get('date');
-    return notSavedPage(date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayInChicago());
+    const day = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayInChicago();
+    return url.pathname === '/mass' ? notSavedPage(day) : notSavedPage(comingSunday(day), 'Sunday prep');
   }
   if (url.pathname !== '/') {
     const samePage = await match(url.pathname, { ignoreSearch: true });
@@ -221,9 +235,9 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') return event.respondWith(page(event, url));
 });
 
-function isRecent(res) {
+function isRecent(res, ms = PREFETCH_FRESH_MS) {
   const at = Date.parse(res.headers.get('Date') || '');
-  return Number.isFinite(at) && Date.now() - at < PREFETCH_FRESH_MS;
+  return Number.isFinite(at) && Date.now() - at < ms;
 }
 
 /** Saves the static files a page needs to start (scripts, styles, fonts), found in its HTML. */
@@ -249,7 +263,7 @@ async function prefetchOne(path) {
   const isPage = !url.pathname.startsWith('/api/');
   const cached = await match(url.href);
   // A saved bulletin PDF never changes; anything else is refreshed unless it was saved moments ago.
-  if (cached && (PDF.test(url.pathname) || isRecent(cached))) return;
+  if (cached && (PDF.test(url.pathname) || isRecent(cached, STABLE.test(url.pathname) ? STABLE_FRESH_MS : undefined))) return;
   if (PDF.test(url.pathname)) {
     const pdf = await fetchPdf(url.origin + url.pathname);
     if (pdf) await storePdf(url.origin + url.pathname, pdf);
@@ -272,7 +286,7 @@ const PDF_DATE = /^\/api\/bulletins\/([^/]+)\/pdf$/;
 function entryDate(url) {
   const reading = READINGS_DATE.exec(url.pathname);
   if (reading) return reading[1];
-  if ((url.pathname === '/' || url.pathname === '/mass') && url.searchParams.has('date')) return url.searchParams.get('date');
+  if (['/', '/mass', '/sunday'].includes(url.pathname) && url.searchParams.has('date')) return url.searchParams.get('date');
   return undefined;
 }
 
@@ -291,8 +305,8 @@ function staticRefs(text, base) {
 
 /**
  * Keeps the cache small, so storage pressure never makes the phone wipe the site's data (and with it the unsynced
- * personal outbox). Drops readings and Today/Mass pages for days before today, any bare `/mass` copy (never read: it
- * means today, see pageKey), every bulletin page or PDF but the newest one, and static files that neither a saved
+ * personal outbox). Drops readings and Today/Mass/Sunday prep pages for days before today, any bare `/mass` or
+ * `/sunday` copy (never read, see pageKey), every bulletin page or PDF but the newest one, and static files that neither a saved
  * page, its stylesheets, nor the running page (`assets`) uses, so old deploys' files do not pile up.
  */
 async function prune(bulletinDate, assets) {
@@ -308,7 +322,7 @@ async function prune(bulletinDate, assets) {
     }
     const date = entryDate(url);
     let drop = date !== undefined && (!ISO_DATE.test(date) || date < today);
-    if (url.pathname === '/mass' && !url.searchParams.has('date')) drop = true;
+    if ((url.pathname === '/mass' || url.pathname === '/sunday') && !url.searchParams.has('date')) drop = true;
     const bulletin = bulletinDate ? BULLETIN_DATE.exec(url.pathname) : null;
     if (bulletin && bulletin[1] !== bulletinDate) drop = true;
     if (drop) await cache.delete(req);

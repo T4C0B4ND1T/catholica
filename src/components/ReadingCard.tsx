@@ -32,7 +32,7 @@ export function ReadingCard({ date, item, legacyKind }: { date: string; item: Ma
           <BookmarkButton date={date} sectionKey={bookmarkKey(item)} label={fullLabel(item)} legacyKind={legacyKind} />
         </div>
       </div>
-      <p className="mt-4 max-w-[34em] whitespace-pre-line text-[19px] leading-[1.75]">{section.text}</p>
+      <p className="mt-4 max-w-[34em] whitespace-pre-line text-[length:calc(19px*var(--text-scale,1))] leading-[1.75]">{section.text}</p>
     </Card>
   );
 }

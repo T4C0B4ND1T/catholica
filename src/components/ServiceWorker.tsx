@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { todayInChicago } from "@/lib/dates";
-import { offlineUrls } from "@/lib/offline/offline-urls";
+import { offlineUrls, rememberPrefetch, type PrefetchRequest } from "@/lib/offline/offline-urls";
 
 /** Static files this page already loaded, so the worker can keep them for offline starts. */
 function loadedAssets(): string[] {
@@ -26,12 +26,14 @@ export function ServiceWorker({ bulletinDate }: { bulletinDate: string | null })
       .then(() => navigator.serviceWorker.ready)
       .then((registration) => {
         if (cancelled) return;
-        registration.active?.postMessage({
+        const request: PrefetchRequest = {
           type: "prefetch",
           urls: offlineUrls(todayInChicago(), bulletinDate),
           bulletinDate,
           assets: loadedAssets(),
-        });
+        };
+        rememberPrefetch(request);
+        registration.active?.postMessage(request);
       })
       .catch((e) => console.error("service worker registration failed", e));
     return () => {
