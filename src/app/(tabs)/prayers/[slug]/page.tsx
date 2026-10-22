@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { RosaryGuide } from "@/components/RosaryGuide";
 import { SpeakButton } from "@/components/SpeakButton";
 import { Card } from "@/components/ui/Card";
-import { PRAYERS, prayerBySlug } from "@/data/prayers";
+import { PRAYERS, prayerBySlug, prayerParagraphs } from "@/data/prayers";
 
 export function generateStaticParams() {
   return PRAYERS.map((p) => ({ slug: p.slug }));
@@ -42,7 +42,7 @@ export default async function PrayerPage({ params }: { params: Promise<{ slug: s
               <SpeakButton label={prayer.title} text={`${prayer.title}. ${spoken(prayer.text)}`} />
             </div>
             <div className="space-y-4 text-[length:calc(19px*var(--text-scale,1))] leading-[1.75]" data-testid="prayer-text">
-              {prayer.text.split("\n\n").map((para) => (
+              {prayerParagraphs(prayer).map((para) => (
                 <p key={para} className="whitespace-pre-line">
                   {para}
                 </p>

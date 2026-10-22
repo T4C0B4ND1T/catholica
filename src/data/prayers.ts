@@ -15,6 +15,8 @@ export interface Prayer {
   note?: string;
   /** Other names a routine might use for this prayer. */
   aliases?: string[];
+  /** Keep every line break (litanies, rhymes, steps). Otherwise prose lines run together on screen. */
+  verse?: boolean;
 }
 
 export const PRAYER_GROUPS: PrayerGroup[] = ['Everyday', 'Through the day', 'Mary', 'At Mass', 'For others'];
@@ -144,6 +146,7 @@ export const PRAYERS: Prayer[] = [
   },
   {
     slug: 'guardian-angel',
+    verse: true,
     title: 'Guardian Angel Prayer',
     group: 'Through the day',
     aliases: ['Angel of God', 'Guardian Angel'],
@@ -156,6 +159,7 @@ export const PRAYERS: Prayer[] = [
   },
   {
     slug: 'examen',
+    verse: true,
     title: 'Examen',
     group: 'Through the day',
     aliases: ['Daily Examen', 'Examination of Conscience'],
@@ -258,6 +262,7 @@ export const PRAYERS: Prayer[] = [
   },
   {
     slug: 'anima-christi',
+    verse: true,
     title: 'Anima Christi',
     group: 'At Mass',
     aliases: ['Soul of Christ', 'Prayer After Communion'],
@@ -363,6 +368,28 @@ const BY_WEEKDAY: MysterySet[] = ['glorious', 'joyful', 'sorrowful', 'glorious',
 /** The mysteries customarily prayed on a weekday (0 = Sunday). */
 export function mysteriesFor(weekday: number): MysterySet {
   return BY_WEEKDAY[weekday];
+}
+
+const OWN_LINE = /^(V\.|R\.|Hail Mary…|Or:)/;
+
+/**
+ * The prayer's paragraphs for display. In prose prayers, lines run together so they wrap to the screen; versicles,
+ * responses and "Hail Mary…" keep their own lines.
+ */
+export function prayerParagraphs(prayer: Prayer): string[] {
+  const paras = prayer.text.split('\n\n');
+  if (prayer.verse) return paras;
+  return paras.map((para) =>
+    para
+      .split('\n')
+      .reduce<string[]>((out, line) => {
+        const prev = out.at(-1);
+        if (prev !== undefined && !OWN_LINE.test(line) && !OWN_LINE.test(prev)) out[out.length - 1] = `${prev} ${line}`;
+        else out.push(line);
+        return out;
+      }, [])
+      .join('\n'),
+  );
 }
 
 export function prayerBySlug(slug: string): Prayer | undefined {

@@ -112,6 +112,28 @@ test.describe('Me tab, signed in', () => {
     expect((await userRows('routines')).length).toBe(4);
   });
 
+  test('add, rename and delete a daily prayer; a library prayer links to its text', async ({ page }) => {
+    await page.goto('/me');
+    await expect(page.getByRole('link', { name: 'Read the Angelus' })).toHaveAttribute('href', '/prayers/angelus');
+    const prayers = page.getByRole('region', { name: 'Daily prayers' });
+    try {
+      await prayers.getByRole('button', { name: 'Edit', exact: true }).click();
+      await prayers.getByLabel('New prayer').fill('Memorare');
+      await prayers.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect.poll(async () => (await userRows('routines')).map((r) => r.name)).toContain('Memorare');
+      const name = page.getByLabel('Name of Memorare');
+      await name.fill('Synthetic Routine');
+      await name.press('Enter');
+      await expect.poll(async () => (await userRows('routines')).map((r) => r.name)).toContain('Synthetic Routine');
+      await page.getByRole('button', { name: 'Delete Synthetic Routine' }).click();
+      await expect.poll(async () => (await userRows('routines')).length).toBe(4);
+      await prayers.getByRole('button', { name: 'Done' }).click();
+      await expect(page.getByRole('button', { name: 'Angelus', exact: true })).toBeVisible();
+    } finally {
+      await admin.from('routines').delete().eq('user_id', userId).in('name', ['Memorare', 'Synthetic Routine']);
+    }
+  });
+
   test('add an intention and mark it answered', async ({ page }) => {
     await page.goto('/me');
     await page.getByLabel('New intention').fill('For my family');

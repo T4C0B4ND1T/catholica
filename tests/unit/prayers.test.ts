@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MYSTERIES, PRAYERS, mysteriesFor, prayerForName } from '@/data/prayers';
+import { MYSTERIES, PRAYERS, mysteriesFor, prayerBySlug, prayerForName, prayerParagraphs } from '@/data/prayers';
 import { offlineUrls } from '@/lib/offline/offline-urls';
 
 describe('prayers', () => {
@@ -25,6 +25,18 @@ describe('prayers', () => {
       'glorious', 'joyful', 'sorrowful', 'glorious', 'luminous', 'sorrowful', 'joyful',
     ]);
     for (const set of Object.values(MYSTERIES)) expect(set.mysteries).toHaveLength(5);
+  });
+
+  it('runs prose lines together but keeps versicles, responses and verse prayers on their own lines', () => {
+    const angelus = prayerParagraphs(prayerBySlug('angelus')!);
+    expect(angelus[0].split('\n')).toEqual([
+      'V. The Angel of the Lord declared unto Mary,',
+      'R. And she conceived of the Holy Spirit.',
+      'Hail Mary…',
+    ]);
+    expect(angelus.at(-1)).not.toContain('\n');
+    expect(prayerParagraphs(prayerBySlug('our-father')!)[0]).not.toContain('\n');
+    expect(prayerParagraphs(prayerBySlug('anima-christi')!)[0].split('\n')).toHaveLength(12);
   });
 
   it('saves the library for offline use', () => {
