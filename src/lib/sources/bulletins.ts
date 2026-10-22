@@ -28,13 +28,18 @@ export async function fetchBulletinPdf(sunday: string): Promise<Uint8Array | nul
   return bytes;
 }
 
+/** Postgres text cannot hold NUL or unpaired surrogates, which some parish PDFs emit; drop them. */
+export function toStorableText(text: string): string {
+  return text.replaceAll('\u0000', '').toWellFormed();
+}
+
 /** Text of every page joined (verbatim from the PDF, for search) and the page count. */
 export async function extractPdfText(bytes: Uint8Array): Promise<{ text: string; pageCount: number }> {
   // unpdf may transfer the buffer to its worker, so hand it a copy and keep the caller's bytes intact.
   const pdf = await getDocumentProxy(new Uint8Array(bytes));
   try {
     const { text, totalPages } = await extractText(pdf, { mergePages: true });
-    return { text, pageCount: totalPages };
+    return { text: toStorableText(text), pageCount: totalPages };
   } finally {
     await pdf.loadingTask.destroy();
   }

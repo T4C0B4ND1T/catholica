@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import { SourceError } from '@/lib/sources/http';
-import { bulletinUrl, extractPdfText, fetchBulletinPdf } from '@/lib/sources/bulletins';
+import { bulletinUrl, extractPdfText, fetchBulletinPdf, toStorableText } from '@/lib/sources/bulletins';
 
 const pdf = () => new Uint8Array(readFileSync(join(__dirname, '../fixtures/bulletins/20261018.pdf')));
 
@@ -24,6 +24,13 @@ describe('extractPdfText', () => {
     expect(pageCount).toBeGreaterThan(0);
     expect(text).toContain('Anselm');
     expect(bytes.byteLength).toBeGreaterThan(1000); // caller's buffer not detached
+  });
+});
+
+describe('toStorableText', () => {
+  // The 2026-09-27 bulletin's text held three NULs, which Postgres rejected ("unsupported Unicode escape sequence").
+  it('drops NUL and unpaired surrogates, keeping everything else', () => {
+    expect(toStorableText('St.\u0000 Anselm \ud800Parish – ✝')).toBe('St. Anselm �Parish – ✝');
   });
 });
 
