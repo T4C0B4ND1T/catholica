@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { DateChip } from "@/components/DateChip";
-import { ReadingCard } from "@/components/ReadingCard";
 import { ReadingsCarousel } from "@/components/ReadingsCarousel";
 import { ReflectionPanel } from "@/components/ReflectionPanel";
 import { SourceFooter } from "@/components/SourceFooter";
@@ -103,11 +102,7 @@ export function TodayView({
       </header>
 
       {readings && sections.length > 0 ? (
-        <ReadingsCarousel kinds={sections.map((s) => s.kind)}>
-          {sections.map((s, i) => (
-            <ReadingCard key={i} date={date} section={s} index={i} />
-          ))}
-        </ReadingsCarousel>
+        <ReadingsCarousel key={date} date={date} sections={sections} />
       ) : (
         <Missing date={date} reason={missing} />
       )}

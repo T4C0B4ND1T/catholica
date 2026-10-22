@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { buttonClasses } from "@/components/ui/Button";
 import { formatDay } from "@/lib/dates";
+import { sectionForKind } from "@/lib/mass-options";
 import type { Bulletin, DailyReadings } from "@/lib/types";
 
 /** Monday to Saturday: the coming Sunday's feast and Gospel citation, and the newest bulletin. */
@@ -14,7 +15,7 @@ export function ThisSundayCard({
   readings: DailyReadings | null;
   bulletin: Bulletin | null;
 }) {
-  const gospel = readings?.sections.find((s) => s.kind === "gospel");
+  const gospel = readings ? sectionForKind(readings.sections, "gospel")?.section : undefined;
   return (
     <Card featured data-testid="this-sunday">
       <p className="small-caps text-muted-foreground">This Sunday</p>

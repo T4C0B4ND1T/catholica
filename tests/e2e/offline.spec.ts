@@ -14,6 +14,11 @@ let TODAY = '';
 let WEEK: string[] = [];
 let UNCACHED = '';
 const CACHE = 'catholica-v1';
+// A clearly synthetic bulletin (a Sunday no other spec uses), removed afterwards.
+const PDF_SUNDAY = '2097-01-06';
+const PDF_PATH = `e2e-synthetic/${PDF_SUNDAY}.pdf`;
+/** Smallest file the PDF checks accept: only the `%PDF-` header matters here. */
+const SYNTHETIC_PDF = Buffer.from('%PDF-1.4\n% synthetic offline test file\n%%EOF\n', 'latin1');
 
 const synthetic = (date: string) => ({
   date,
@@ -86,6 +91,16 @@ test.describe('Offline', () => {
       const gospel = (r.sections as { kind: string; text: string }[]).find((s) => s.kind === 'gospel');
       days.set(r.date as string, { feast: r.feast as string, gospel: gospel?.text.slice(0, 40) ?? '' });
     }
+    const up = await admin.storage.from('bulletins').upload(PDF_PATH, SYNTHETIC_PDF, { contentType: 'application/pdf', upsert: true });
+    if (up.error) throw up.error;
+    const bulletin = await admin.from('bulletins').upsert({
+      sunday_date: PDF_SUNDAY,
+      source_url: 'https://example.invalid/synthetic-offline-bulletin.pdf',
+      storage_path: PDF_PATH,
+      page_count: 1,
+      text: 'synthetic',
+    });
+    if (bulletin.error) throw bulletin.error;
     // The uncached date must really have nothing saved for this test to mean anything.
     const far = await admin.from('readings').select('date').eq('date', UNCACHED).maybeSingle();
     if (far.error) throw far.error;
@@ -93,8 +108,10 @@ test.describe('Offline', () => {
   });
 
   test.afterAll(async () => {
-    if (!admin || inserted.length === 0) return;
-    await admin.from('readings').delete().in('date', inserted);
+    if (!admin) return;
+    await admin.from('bulletins').delete().eq('sunday_date', PDF_SUNDAY);
+    await admin.storage.from('bulletins').remove([PDF_PATH]);
+    if (inserted.length) await admin.from('readings').delete().in('date', inserted);
   });
 
   test.beforeEach(() => {
@@ -277,6 +294,53 @@ test.describe('Offline', () => {
     await expect(page.getByText(days.get(TODAY)!.gospel)).toBeVisible();
     await page.getByRole('link', { name: 'Follow the Mass' }).click();
     await expect(page.locator('#holy-gospel').getByText(days.get(TODAY)!.gospel)).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('a bulletin PDF behind the signed-URL redirect is saved under its own path and opens offline', async ({ page, context }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const pdfPath = `/api/bulletins/${PDF_SUNDAY}/pdf`;
+    await page.goto('/');
+    await waitForPrefetch(page);
+
+    // The prefetch the app sends for the newest bulletin: the worker follows the redirect and keeps the file.
+    const saved = await page.evaluate(
+      async ({ cacheName, path, bulletinDate }) => {
+        const reg = await navigator.serviceWorker.ready;
+        const done = new Promise<void>((resolve) =>
+          navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && resolve()),
+        );
+        reg.active!.postMessage({ type: 'prefetch', urls: [path], assets: [], bulletinDate });
+        await done;
+        const cache = await caches.open(cacheName);
+        const res = await cache.match(path);
+        if (!res) return null;
+        const keys = (await cache.keys()).map((r) => r.url);
+        return {
+          head: new TextDecoder().decode((await res.arrayBuffer()).slice(0, 5)),
+          type: res.headers.get('content-type'),
+          redirected: res.redirected,
+          signedKeys: keys.filter((k) => k.includes('token=') || k.includes('/storage/')),
+        };
+      },
+      { cacheName: CACHE, path: pdfPath, bulletinDate: PDF_SUNDAY },
+    );
+    expect(saved).toEqual({ head: '%PDF-', type: 'application/pdf', redirected: false, signedKeys: [] });
+
+    // The viewer, opened once online so its page is saved, then again with no signal.
+    await page.goto(`/bulletin/${PDF_SUNDAY}`);
+    await expect(page.locator(`iframe[src="${pdfPath}"]`)).toBeVisible();
+    await goOffline(context);
+    await page.reload();
+    await expect(page.locator(`iframe[src="${pdfPath}"]`)).toBeVisible();
+    const offline = await page.evaluate(async (path) => {
+      const res = await fetch(path);
+      return { status: res.status, head: new TextDecoder().decode((await res.arrayBuffer()).slice(0, 5)) };
+    }, pdfPath);
+    expect(offline).toEqual({ status: 200, head: '%PDF-' });
+    // The iframe's navigation can be answered from this entry because it is not `redirected` (asserted above).
+    // Whether a frame shows it depends on the browser's PDF viewer, which CI's headless shell lacks.
     expect(errors).toEqual([]);
   });
 

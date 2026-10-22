@@ -1,12 +1,12 @@
 import { BookmarkButton } from "@/components/BookmarkButton";
-import { SECTION_LABELS } from "@/lib/section-labels";
 import { SpeakButton } from "@/components/SpeakButton";
 import { Card } from "@/components/ui/Card";
-import type { ReadingSection } from "@/lib/types";
+import { bookmarkKey, fullLabel, type MassSection } from "@/lib/mass-options";
+import type { ReadingKind } from "@/lib/types";
 
 /** One saved reading. Text comes only from the saved section; AI text never appears here. */
-export function ReadingCard({ date, section, index }: { date: string; section: ReadingSection; index: number }) {
-  const label = SECTION_LABELS[section.kind];
+export function ReadingCard({ date, item, legacyKind }: { date: string; item: MassSection; legacyKind?: ReadingKind }) {
+  const { section, index, label } = item;
   const featured = section.kind === "gospel";
   return (
     <Card
@@ -14,7 +14,7 @@ export function ReadingCard({ date, section, index }: { date: string; section: R
       id={`card-${index}`}
       data-card={section.kind}
       role="group"
-      aria-label={label}
+      aria-label={fullLabel(item)}
       className="w-full shrink-0 snap-center self-start"
     >
       <div className="mb-4 flex items-center gap-3">
@@ -29,7 +29,7 @@ export function ReadingCard({ date, section, index }: { date: string; section: R
         </div>
         <div className="-mr-2 -mt-1 flex shrink-0">
           <SpeakButton label={section.title || label} text={`${section.title}. ${section.text}`} />
-          <BookmarkButton date={date} section={section.kind} />
+          <BookmarkButton date={date} sectionKey={bookmarkKey(item)} label={fullLabel(item)} legacyKind={legacyKind} />
         </div>
       </div>
       <p className="mt-4 max-w-[34em] whitespace-pre-line text-[19px] leading-[1.75]">{section.text}</p>

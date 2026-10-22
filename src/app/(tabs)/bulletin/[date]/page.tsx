@@ -32,12 +32,12 @@ export default async function BulletinViewerPage({ params }: { params: Promise<{
       <PdfViewer src={`/api/bulletins/${date}/pdf`} title={`Bulletin for ${formatDay(date)}`} />
       <p className="mt-4 text-center text-sm">
         <a
-          href={bulletin.sourceUrl || 'https://stanselmparish.org'}
+          href={bulletin.sourceUrl || 'https://stanselmparish.org/bulletins'}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex min-h-11 items-center text-muted-foreground underline decoration-accent underline-offset-4"
         >
-          Source: stanselmparish.org
+          Source: St. Anselm Parish
         </a>
       </p>
     </>

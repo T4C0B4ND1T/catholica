@@ -1,13 +1,26 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { SECTION_LABELS } from "@/lib/section-labels";
-import type { ReadingKind } from "@/lib/types";
+import { ReadingCard } from "@/components/ReadingCard";
+import { defaultMass, massNames, massSections, sectionForKind } from "@/lib/mass-options";
+import type { ReadingSection } from "@/lib/types";
 
-/** Horizontal scroll-snap cards (children, one per section) with a pill row that jumps to a card. */
-export function ReadingsCarousel({ kinds, children }: { kinds: ReadingKind[]; children: React.ReactNode }) {
+/**
+ * Horizontal scroll-snap cards, one per section, with a pill row that jumps to a card. On a day of several Masses
+ * (Christmas, a Vigil and Day) a Mass picker above the pills chooses which Mass's sections are shown.
+ */
+export function ReadingsCarousel({ date, sections }: { date: string; sections: ReadingSection[] }) {
   const track = useRef<HTMLDivElement>(null);
+  const masses = massNames(sections);
+  const [mass, setMass] = useState<string | null>(() => defaultMass(sections));
   const [active, setActive] = useState(0);
+  const shown = massSections(sections, masses.length > 1 ? mass : null);
+
+  function chooseMass(name: string) {
+    setMass(name);
+    setActive(0);
+    track.current?.scrollTo({ left: 0, behavior: "auto" });
+  }
 
   function jump(i: number) {
     const el = track.current;
@@ -34,10 +47,29 @@ export function ReadingsCarousel({ kinds, children }: { kinds: ReadingKind[]; ch
 
   return (
     <div>
+      {masses.length > 1 && (
+        <div role="group" aria-label="Mass" data-testid="mass-picker" className="mb-4 flex flex-wrap justify-center gap-2">
+          {masses.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => chooseMass(name)}
+              aria-pressed={name === mass}
+              className={`min-h-11 touch-manipulation rounded-md border px-3 text-sm transition-colors duration-200 ease-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${
+                name === mass
+                  ? "border-accent bg-muted text-foreground"
+                  : "border-border text-muted-foreground hover:border-accent hover:text-foreground"
+              }`}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      )}
       <nav aria-label="Readings" className="mb-4 flex flex-wrap justify-center gap-2">
-        {kinds.map((kind, i) => (
+        {shown.map((m, i) => (
           <button
-            key={i}
+            key={m.index}
             type="button"
             onClick={() => jump(i)}
             aria-current={i === active ? "true" : undefined}
@@ -47,7 +79,7 @@ export function ReadingsCarousel({ kinds, children }: { kinds: ReadingKind[]; ch
                 : "border-border text-muted-foreground hover:border-accent hover:text-foreground"
             }`}
           >
-            {SECTION_LABELS[kind]}
+            {m.label}
           </button>
         ))}
       </nav>
@@ -59,7 +91,14 @@ export function ReadingsCarousel({ kinds, children }: { kinds: ReadingKind[]; ch
         tabIndex={0}
         className="relative flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain pb-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        {children}
+        {shown.map((m) => (
+          <ReadingCard
+            key={m.index}
+            date={date}
+            item={m}
+            legacyKind={sectionForKind(sections, m.section.kind)?.index === m.index ? m.section.kind : undefined}
+          />
+        ))}
       </div>
     </div>
   );

@@ -47,3 +47,22 @@ pnpm supabase db reset              # re-apply migrations and seed
 
 Production sign-in is Google only. The integration tests create two throwaway email/password users
 through the admin API on the local stack only.
+
+## Production
+
+- Supabase: apply `supabase/migrations/*.sql` in order (this also creates the private `bulletins` bucket). Enable the
+  Google provider, set the Site URL, add `https://<domain>/auth/callback` to Redirect URLs, and turn off email sign-ups.
+- Vercel: set every variable in `.env.example` for Production and Preview. `maxDuration = 300` on the cron routes needs
+  Fluid compute.
+- Crons (`vercel.json`, UTC): `/api/cron/readings` keeps today through today + 7 saved; `/api/cron/bulletin` probes
+  recent Sundays at `files.ecatholic.com/17181/bulletins/YYYYMMDD.pdf` (the parish list page is behind a Cloudflare
+  challenge). Both need `Authorization: Bearer $CRON_SECRET`, which Vercel sends automatically.
+- Seed after the first deploy:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" https://<domain>/api/cron/readings
+NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... pnpm tsx scripts/backfill-bulletins.ts --since 2025-01-05
+```
+
+The full archive (the default `--since` is 2023-08-06) is several hundred MB of PDFs; check storage against the
+free tier's 1 GB.
