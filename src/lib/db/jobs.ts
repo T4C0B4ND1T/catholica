@@ -1,8 +1,10 @@
 import 'server-only';
 import { createAdminClient } from './admin';
 
+export type JobName = 'readings' | 'bulletin' | 'sunday-email';
+
 /** Records a job outcome in job_runs (service role only). Never throws into the job. */
-export async function logRun(job: 'readings' | 'bulletin', status: 'ok' | 'error', message: string): Promise<void> {
+export async function logRun(job: JobName, status: 'ok' | 'error', message: string): Promise<void> {
   try {
     const { error } = await createAdminClient().from('job_runs').insert({ job, status, message });
     if (error) console.error('logRun failed', error.message);
