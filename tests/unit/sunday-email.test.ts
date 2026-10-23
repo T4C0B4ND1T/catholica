@@ -26,7 +26,7 @@ describe('buildSundayEmail', () => {
       readings,
       reflection: 'Love is the whole law.',
       questions: ['Whom do I find hard to love?'],
-      bulletin: { sundayDate: SUNDAY, summary: { massTimes: ['Sun 9:00 AM'], confession: ['Sat 3:00 PM'], announcements: [] } },
+      bulletin: { sundayDate: SUNDAY, summary: { massTimes: ['Sun 9:00 AM'], confession: ['Sat 3:00 PM'], announcements: [{ title: 'Food drive', text: 'Cans in the narthex' }] } },
       siteUrl: 'https://catholica-daily.vercel.app/',
     });
     expect(e.subject).toBe('Sunday prep: Thirtieth Sunday in Ordinary Time');
@@ -34,7 +34,13 @@ describe('buildSundayEmail', () => {
       expect(e.text).toContain(s);
     }
     expect(e.text).toContain('https://catholica-daily.vercel.app/sunday?date=2026-10-25');
+    expect(e.text).toContain('- Food drive: Cans in the narthex');
+    expect(e.html).toContain('From the bulletin');
     expect(e.html).toContain('&lt;your&gt;');
+    // Every reading in full, and the at-a-glance box.
+    expect(e.html).toContain('Thus says the Lord');
+    expect(e.html).toContain('At a glance');
+    expect(e.html).toContain('Ordinary Time · Year A');
     expect(e.html).not.toContain('<your>');
   });
 
