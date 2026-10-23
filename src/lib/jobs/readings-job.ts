@@ -10,7 +10,7 @@ const MAX_ATTEMPTS = 3;
 const URGENT_DAYS = 0;
 /** Waits before the 2nd and 3rd attempts. */
 const BACKOFF_MS = [1000, 3000];
-const DEFAULT_BUDGET_MS = 200_000;
+const DEFAULT_BUDGET_MS = 150_000;
 
 export interface ReadingsJobDeps {
   fetchUsccb: (date: string) => Promise<DailyReadings>;
@@ -38,7 +38,7 @@ export interface ReadingsJobDeps {
   sleep?: (ms: number) => Promise<void>;
   /** Monotonic-ish clock in ms (default Date.now), used for the time budget. */
   clock?: () => number;
-  /** Stop starting new dates after this many ms (default 200s; the route allows 300s, and an AI step started just before the budget runs out can take another minute). */
+  /** Stop starting new dates after this many ms (default 150s; the route allows 300s, and an AI step started just before the budget runs out can take two minutes when it falls back to a second model). */
   budgetMs?: number;
 }
 
@@ -87,7 +87,7 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
       }
 
       try {
-        // Each AI step can take up to 60s, so none starts once the budget is spent; the next run picks them up.
+        // Each AI step can take up to 2 minutes (60s per model), so none starts once the budget is spent; the next run picks them up.
         if (clock() - started > budgetMs) throw new Error('AI skipped, time budget exceeded');
         if (!(await deps.hasReflection(date))) {
           await deps.saveReflection(date, await deps.writeReflection(readings));
