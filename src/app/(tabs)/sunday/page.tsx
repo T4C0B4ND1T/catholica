@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/Card";
 import { SectionLabel } from "@/components/ui/SectionLabel";
 import { buttonClasses } from "@/components/ui/Button";
 import { addDays, dateParam, formatDay, todayInChicago } from "@/lib/dates";
-import { latestBulletin } from "@/lib/db/bulletins";
+import { getBulletinSummary, latestBulletin } from "@/lib/db/bulletins";
+import { BulletinSummaryCard } from "@/components/BulletinSummaryCard";
 import { getInsights, getQuestions, getReadings, getReflection } from "@/lib/db/readings";
 import { comingSunday } from "@/lib/liturgical/calendar";
 import { defaultMass, massSections } from "@/lib/mass-options";
@@ -38,6 +39,7 @@ export default async function SundayPrepPage({ searchParams }: { searchParams: P
   const sections = readings ? massSections(readings.sections, defaultMass(readings.sections)) : [];
   // The newest bulletin is for this Sunday or the one before; anything older is not about this week.
   const weekBulletin = bulletin && bulletin.sundayDate >= addDays(sunday, -7) ? bulletin : null;
+  const summary = weekBulletin ? await getBulletinSummary(weekBulletin.sundayDate) : null;
 
   return (
     <div className="space-y-8">
@@ -94,16 +96,34 @@ export default async function SundayPrepPage({ searchParams }: { searchParams: P
         <NoteEditor date={sunday} label={`Note for ${formatDay(sunday)}`} rows={5} />
       </section>
 
-      <div className="flex flex-wrap justify-center gap-3">
+      <div className="flex justify-center">
         <Link href={`/mass?date=${sunday}`} className={buttonClasses("primary")}>
           Follow the Mass
         </Link>
-        {weekBulletin && (
-          <Link href={`/bulletin/${weekBulletin.sundayDate}`} className={buttonClasses("outline")}>
-            Bulletin for {formatDay(weekBulletin.sundayDate)}
-          </Link>
-        )}
       </div>
+
+      <section aria-labelledby="prep-bulletin-title" className="space-y-4" data-testid="prep-bulletin">
+        <SectionLabel>
+          <span id="prep-bulletin-title">Bulletin</span>
+        </SectionLabel>
+        {weekBulletin ? (
+          <>
+            {summary && <BulletinSummaryCard summary={summary} />}
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Link href={`/bulletin/${weekBulletin.sundayDate}`} className={buttonClasses("outline")}>
+                Bulletin for {formatDay(weekBulletin.sundayDate)}
+              </Link>
+            </div>
+          </>
+        ) : (
+          <p className="text-center text-muted-foreground">This week&apos;s bulletin isn&apos;t saved yet.</p>
+        )}
+        <p className="text-center">
+          <Link href="/bulletin" className="inline-flex min-h-11 items-center text-muted-foreground underline decoration-accent underline-offset-4">
+            All bulletins and search
+          </Link>
+        </p>
+      </section>
 
       {readings && sections.length > 0 && <SourceFooter readings={readings} />}
     </div>
