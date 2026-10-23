@@ -2,7 +2,7 @@
  * Fetches readings from USCCB on this machine and uploads them to the site, for when USCCB's pages challenge the
  * site's own servers. Days already saved are skipped by the site.
  * Usage: pnpm tsx scripts/seed-readings.ts --from YYYY-MM-DD --to YYYY-MM-DD
- * Needs SITE_URL (e.g. https://catholica-beryl.vercel.app) and CRON_SECRET.
+ * Needs SITE_URL (e.g. https://catholica-daily.vercel.app) and CRON_SECRET.
  */
 import { createRequire } from 'node:module';
 
