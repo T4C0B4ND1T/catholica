@@ -9,12 +9,7 @@ import { parseBulletinSummary, parseInsights, parseQuestions } from './parse';
 /** Gemini can hang for most of a minute when busy; give up sooner so a cron run stays inside its time limit. */
 const TIMEOUT_MS = 60_000;
 /** Short writing tasks need little reasoning; low thinking answers far faster and rarely hits the timeout. */
-function thinkingFor(model: string) {
-  // Gemini 2.x takes a thinking budget instead of a level.
-  return model.startsWith('gemini-2')
-    ? { thinkingConfig: { thinkingBudget: 0 } }
-    : { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } };
-}
+const THINKING = { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } };
 
 /** One Gemini call, falling back to another model when the main one is overloaded or too slow. */
 async function generate(contents: string, json = false): Promise<string> {
@@ -25,7 +20,7 @@ async function generate(contents: string, json = false): Promise<string> {
     const res = await ai.models.generateContent({
       model,
       contents,
-      config: { ...thinkingFor(model), ...(json ? { responseMimeType: 'application/json' } : {}) },
+      config: { ...THINKING, ...(json ? { responseMimeType: 'application/json' } : {}) },
     });
     return res.text ?? '';
   });
