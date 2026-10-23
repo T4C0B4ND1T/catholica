@@ -159,7 +159,24 @@ describe('runReadingsJob', () => {
     const deps = setup({ now: new Date('2026-10-22T03:00:00Z') });
     await runReadingsJob(deps);
     expect(vi.mocked(deps.getReadings).mock.calls[0][0]).toBe('2026-10-21');
-    expect(vi.mocked(deps.getReadings).mock.calls).toHaveLength(8);
+    // Eight days ahead, then the seven days before for the catch-up.
+    expect(vi.mocked(deps.getReadings).mock.calls.slice(0, 8).map(([d]: [string]) => d).at(-1)).toBe('2026-10-28');
+    expect(vi.mocked(deps.getReadings).mock.calls[8][0]).toBe('2026-10-20');
+  });
+
+  it('catches up the past week\'s missing reflections with time left over', async () => {
+    const deps = setup({}, [...DATES, '2026-10-19', '2026-10-20'], [...DATES, '2026-10-20']);
+    await runReadingsJob(deps);
+    expect(deps.writeReflection).toHaveBeenCalledTimes(1);
+    expect(deps.saveReflection).toHaveBeenCalledWith('2026-10-19', 'reflection');
+    expect(deps.logRun).toHaveBeenCalledWith('readings', 'ok', expect.stringContaining('caught up AI for 2026-10-19'));
+  });
+
+  it('skips the catch-up once the budget is spent', async () => {
+    let t = 0;
+    const deps = setup({ clock: () => (t += 1000), budgetMs: 9_000 }, [...DATES, '2026-10-19'], DATES);
+    await runReadingsJob(deps);
+    expect(deps.saveReflection).not.toHaveBeenCalledWith('2026-10-19', expect.anything());
   });
 
   it('writes prep questions once, for the Sunday only', async () => {

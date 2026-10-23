@@ -1,3 +1,4 @@
+import { AppHealth } from "@/components/me/AppHealth";
 import { Catechism } from "@/components/me/Catechism";
 import { Bookmarks } from "@/components/me/Bookmarks";
 import { Intentions } from "@/components/me/Intentions";
@@ -40,6 +41,7 @@ export default async function MePage() {
         )}
         <Catechism signedIn={signedIn} />
         <SettingsPanel signedIn={signedIn} />
+        {signedIn && <AppHealth />}
       </div>
     </>
   );

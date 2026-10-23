@@ -3,6 +3,8 @@ import type { DailyReadings, ReflectionInsights } from '@/lib/types';
 
 const WINDOW_DAYS = 7;
 const MAX_ATTEMPTS = 3;
+/** Days before today whose missing reflections, insights and questions are retried. */
+const LOOKBACK_DAYS = 7;
 /**
  * Only a failure for today is urgent enough to email. Future days come from USCCB's pages, which challenge Vercel's
  * servers, and each day turns up in the feed on the morning itself.
@@ -48,7 +50,8 @@ function errMessage(e: unknown): string {
 
 /**
  * Ensures readings (and one AI reflection and set of insights each) exist for today through today + 7.
- * Each missing date gets up to three fetch attempts per run. Sundays also get prep questions.
+ * Each missing date gets up to three fetch attempts per run. Sundays also get prep questions. Time left over goes
+ * to the past week's missing AI pieces.
  * Reflection, insight and question trouble never blocks readings.
  */
 export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: string[]; failed: string[] }> {
@@ -60,6 +63,37 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
   const clock = deps.clock ?? Date.now;
   const budgetMs = deps.budgetMs ?? DEFAULT_BUDGET_MS;
   const started = clock();
+
+  /** Writes whatever AI pieces `date` lacks: the reflection, then its insights, and on a Sunday the prep questions. */
+  const fillAi = async (date: string, readings: DailyReadings): Promise<boolean> => {
+    let wrote = false;
+    try {
+      // Each AI step can take up to 2 minutes (60s per model), so none starts once the budget is spent; the next run picks them up.
+      if (clock() - started > budgetMs) throw new Error('AI skipped, time budget exceeded');
+      if (!(await deps.hasReflection(date))) {
+        await deps.saveReflection(date, await deps.writeReflection(readings));
+        wrote = true;
+      }
+      // The insights go on the reflection row, so they wait for a reflection; their trouble never stops the questions.
+      const ins = deps.insights;
+      if (ins && clock() - started <= budgetMs && (await deps.hasReflection(date)) && !(await ins.has(date))) {
+        try {
+          await ins.save(date, await ins.write(readings));
+          wrote = true;
+        } catch (e) {
+          notes.push(`insights ${date}: ${errMessage(e)}`);
+        }
+      }
+      const q = deps.questions;
+      if (q && clock() - started <= budgetMs && dayOfWeek(date) === 0 && !(await q.has(date))) {
+        await q.save(date, await q.write(readings));
+        wrote = true;
+      }
+    } catch (e) {
+      notes.push(`reflection ${date}: ${errMessage(e)}`);
+    }
+    return wrote;
+  };
 
   for (let i = 0; i <= WINDOW_DAYS; i++) {
     const date = addDays(today, i);
@@ -86,33 +120,25 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
         saved.push(date);
       }
 
-      try {
-        // Each AI step can take up to 2 minutes (60s per model), so none starts once the budget is spent; the next run picks them up.
-        if (clock() - started > budgetMs) throw new Error('AI skipped, time budget exceeded');
-        if (!(await deps.hasReflection(date))) {
-          await deps.saveReflection(date, await deps.writeReflection(readings));
-        }
-        // The insights go on the reflection row, so they wait for a reflection; their trouble never stops the questions.
-        const ins = deps.insights;
-        if (ins && clock() - started <= budgetMs && (await deps.hasReflection(date)) && !(await ins.has(date))) {
-          try {
-            await ins.save(date, await ins.write(readings));
-          } catch (e) {
-            notes.push(`insights ${date}: ${errMessage(e)}`);
-          }
-        }
-        const q = deps.questions;
-        if (q && clock() - started <= budgetMs && dayOfWeek(date) === 0 && !(await q.has(date))) {
-          await q.save(date, await q.write(readings));
-        }
-      } catch (e) {
-        notes.push(`reflection ${date}: ${errMessage(e)}`);
-      }
+      await fillAi(date, readings);
     } catch (e) {
       failed.push(date);
       notes.push(`readings ${date}: ${errMessage(e)}`);
     }
   }
+
+  // Catch-up: earlier days whose AI pieces failed on their own run get another try with the time left.
+  const caughtUp: string[] = [];
+  for (let i = 1; i <= LOOKBACK_DAYS && clock() - started <= budgetMs; i++) {
+    const date = addDays(today, -i);
+    try {
+      const readings = await deps.getReadings(date);
+      if (readings && (await fillAi(date, readings))) caughtUp.push(date);
+    } catch (e) {
+      notes.push(`catch-up ${date}: ${errMessage(e)}`);
+    }
+  }
+  if (caughtUp.length) notes.push(`caught up AI for ${caughtUp.join(', ')}`);
 
   const urgent = failed.filter((d) => d <= addDays(today, URGENT_DAYS));
   if (urgent.length > 0) {
