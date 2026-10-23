@@ -53,6 +53,14 @@ async function waitForPrefetch(page: Page) {
       { timeout: 30_000 },
     )
     .toEqual([]);
+  // The worker runs prefetches in order, so this empty one ends after the app's own, which may still be pruning.
+  await page.evaluate(async () => {
+    const reg = await navigator.serviceWorker.ready;
+    await new Promise<void>((resolve) => {
+      navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && e.data.id === 'settle' && resolve());
+      reg.active!.postMessage({ type: 'prefetch', id: 'settle', urls: [], assets: [], bulletinDate: null });
+    });
+  });
 }
 
 /**
@@ -263,9 +271,10 @@ test.describe('Offline', () => {
         await Promise.all(paths.map((p) => cache.put(p, new Response('planted'))));
         const reg = await navigator.serviceWorker.ready;
         const done = new Promise<void>((resolve) =>
-          navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && resolve()),
+          navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && e.data.id === 'e2e' && resolve()),
         );
-        reg.active!.postMessage({ type: 'prefetch', urls: [], assets: [], bulletinDate });
+        // The app's own prefetch can still be running and finish first; wait for this one by its id.
+        reg.active!.postMessage({ type: 'prefetch', id: 'e2e', urls: [], assets: [], bulletinDate });
         await done;
         return (await cache.keys()).map((r) => {
           const u = new URL(r.url);
@@ -309,9 +318,10 @@ test.describe('Offline', () => {
       async ({ cacheName, path, bulletinDate }) => {
         const reg = await navigator.serviceWorker.ready;
         const done = new Promise<void>((resolve) =>
-          navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && resolve()),
+          navigator.serviceWorker.addEventListener('message', (e) => e.data?.type === 'prefetch-done' && e.data.id === 'e2e' && resolve()),
         );
-        reg.active!.postMessage({ type: 'prefetch', urls: [path], assets: [], bulletinDate });
+        // The app's own prefetch can still be running and finish first; wait for this one by its id.
+        reg.active!.postMessage({ type: 'prefetch', id: 'e2e', urls: [path], assets: [], bulletinDate });
         await done;
         const cache = await caches.open(cacheName);
         const res = await cache.match(path);
