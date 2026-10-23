@@ -1,29 +1,26 @@
 import 'server-only';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { generateText } from 'ai';
 import { fetchCatechism } from '@/lib/sources/catechism';
 import type { BulletinSummary, DailyReadings, ReflectionInsights } from '@/lib/types';
-import { withFallback } from './fallback';
-import { geminiFallbackModels, geminiModel } from './model';
+import { aiFallbackModels, aiModel } from './model';
 import { parseBulletinSummary, parseInsights, parseQuestions } from './parse';
 
-/** Gemini can hang for most of a minute when busy; give up sooner so a cron run stays inside its time limit. */
+/** Give up on a slow answer so a cron run stays inside its time limit. AI Gateway's fallback model shares this budget. */
 const TIMEOUT_MS = 60_000;
-/** Short writing tasks need little reasoning; low thinking answers far faster and rarely hits the timeout. */
-const THINKING = { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } };
 
-/** One Gemini call, falling back to another model when the main one is overloaded or too slow. */
-async function generate(contents: string, json = false): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
-  return withFallback([geminiModel(), ...geminiFallbackModels()], async (model) => {
-    const res = await ai.models.generateContent({
-      model,
-      contents,
-      config: { ...THINKING, ...(json ? { responseMimeType: 'application/json' } : {}) },
-    });
-    return res.text ?? '';
+/**
+ * One AI call through Vercel AI Gateway. On Vercel the gateway authenticates with the deployment's OIDC token, so no
+ * key is needed there; elsewhere set AI_GATEWAY_API_KEY.
+ */
+async function generate(prompt: string): Promise<string> {
+  const { text } = await generateText({
+    model: aiModel(),
+    prompt,
+    timeout: TIMEOUT_MS,
+    maxRetries: 1,
+    providerOptions: { gateway: { models: aiFallbackModels() } },
   });
+  return text;
 }
 
 function promptFor(r: DailyReadings): string {
@@ -44,7 +41,7 @@ function promptFor(r: DailyReadings): string {
 /** AI reflection for the day. Stored only in `reflections`, never in a readings field. */
 export async function writeReflection(r: DailyReadings): Promise<string> {
   const text = (await generate(promptFor(r))).trim();
-  if (!text) throw new Error('Gemini returned no text');
+  if (!text) throw new Error('The AI model returned no text');
   return text;
 }
 
@@ -71,7 +68,7 @@ export async function writeInsights(r: DailyReadings): Promise<ReflectionInsight
     '',
     body,
   ].join('\n');
-  const insights = parseInsights(await generate(prompt, true));
+  const insights = parseInsights(await generate(prompt));
   const real = await Promise.all(
     insights.catechism.map((c) => fetchCatechism(c.paragraph).then((p) => (p ? c : null), () => null)),
   );
@@ -92,7 +89,7 @@ export async function writeQuestions(r: DailyReadings): Promise<string[]> {
     '',
     body,
   ].join('\n');
-  return parseQuestions(await generate(prompt, true));
+  return parseQuestions(await generate(prompt));
 }
 
 /** Bulletin text past this is mostly advertisers; the schedule and news come first. */
@@ -111,7 +108,7 @@ export async function summarizeBulletin(text: string): Promise<BulletinSummary> 
     '',
     text.slice(0, BULLETIN_TEXT_LIMIT),
   ].join('\n');
-  return parseBulletinSummary(await generate(prompt, true));
+  return parseBulletinSummary(await generate(prompt));
 }
 
 /** AI answer to a Catechism question. Shown only under an "AI answer" label, never as Catechism text. */
@@ -126,6 +123,6 @@ export async function askCatechism(question: string): Promise<string> {
     `Question: ${question}`,
   ].join('\n');
   const text = (await generate(prompt)).trim();
-  if (!text) throw new Error('Gemini returned no text');
+  if (!text) throw new Error('The AI model returned no text');
   return text;
 }

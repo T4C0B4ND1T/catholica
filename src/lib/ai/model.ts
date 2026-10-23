@@ -1,16 +1,16 @@
-/** Single source for the Gemini model name (safe to import anywhere). */
-export function geminiModel(): string {
-  return process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+/** Single source for the AI model, a Vercel AI Gateway `provider/model` ID (safe to import anywhere). */
+export function aiModel(): string {
+  return process.env.AI_MODEL || 'openai/gpt-4.1-mini';
 }
 
 /**
- * Models to try, in order, when the main one is overloaded or too slow. Comma separated in `GEMINI_FALLBACK_MODELS`. Both defaults are
- * stable in the Gemini API and take a thinking level; gemini-2.5-flash is closed to new keys.
+ * Models AI Gateway tries, in order, when the main one fails. Comma separated in `AI_FALLBACK_MODELS`. The default is
+ * from another provider, so one provider's outage doesn't stop the readings job.
  */
-export function geminiFallbackModels(): string[] {
-  const raw = process.env.GEMINI_FALLBACK_MODELS ?? 'gemini-3.6-flash,gemini-3.5-flash-lite';
+export function aiFallbackModels(): string[] {
+  const raw = process.env.AI_FALLBACK_MODELS ?? 'google/gemini-2.5-flash-lite';
   return raw
     .split(',')
     .map((m) => m.trim())
-    .filter((m) => m && m !== geminiModel());
+    .filter((m) => m && m !== aiModel());
 }

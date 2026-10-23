@@ -1,4 +1,4 @@
-import { summarizeBulletin } from '@/lib/ai/gemini';
+import { summarizeBulletin } from '@/lib/ai/writer';
 import {
   bulletinsMissingSummary,
   dropStoredPdf,

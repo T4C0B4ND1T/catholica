@@ -1,4 +1,4 @@
-import { writeInsights, writeQuestions, writeReflection } from '@/lib/ai/gemini';
+import { writeInsights, writeQuestions, writeReflection } from '@/lib/ai/writer';
 import { logRun } from '@/lib/db/jobs';
 import {
   getReadings,

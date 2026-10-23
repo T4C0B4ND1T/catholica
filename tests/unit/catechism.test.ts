@@ -9,7 +9,7 @@ const h = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/sources/http', () => ({ postForm: h.postForm, SourceError: class extends Error {} }));
 vi.mock('@/lib/auth/require-user', () => ({ requireUser: h.requireUser }));
-vi.mock('@/lib/ai/gemini', () => ({ askCatechism: h.askCatechism }));
+vi.mock('@/lib/ai/writer', () => ({ askCatechism: h.askCatechism }));
 
 import { fetchCatechism, parseCatechismResponse, parseCatechismSearch, searchCatechism } from '@/lib/sources/catechism';
 import { POST } from '@/app/api/catechism/ask/route';

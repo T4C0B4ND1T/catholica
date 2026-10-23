@@ -11,7 +11,7 @@ vi.mock('@/lib/db/bulletins', () => ({
   saveBulletinSummary: vi.fn(),
   storedPdfsBefore: vi.fn(),
 }));
-vi.mock('@/lib/ai/gemini', () => ({ summarizeBulletin: vi.fn() }));
+vi.mock('@/lib/ai/writer', () => ({ summarizeBulletin: vi.fn() }));
 vi.mock('@/lib/db/jobs', () => ({ logRun: vi.fn() }));
 vi.mock('@/lib/jobs/alert', () => ({ sendAlert: vi.fn() }));
 vi.mock('@/lib/sources/bulletins', () => ({ bulletinUrl: vi.fn(), extractPdfText: vi.fn(), fetchBulletinPdf: vi.fn() }));

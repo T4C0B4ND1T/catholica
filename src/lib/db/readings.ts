@@ -1,6 +1,6 @@
 import 'server-only';
 import type { DailyReadings, ReadingSection, ReflectionInsights } from '@/lib/types';
-import { geminiModel } from '@/lib/ai/model';
+import { aiModel } from '@/lib/ai/model';
 import { liturgicalDay } from '@/lib/liturgical/calendar';
 import { createAdminClient } from './admin';
 import { createServerClient } from './server';
@@ -84,7 +84,7 @@ export async function hasReflection(date: string): Promise<boolean> {
 export async function saveReflection(date: string, text: string, model?: string): Promise<void> {
   const { error } = await createAdminClient()
     .from('reflections')
-    .upsert({ date, text, model: model ?? geminiModel() }, { onConflict: 'date' });
+    .upsert({ date, text, model: model ?? aiModel() }, { onConflict: 'date' });
   if (error) throw new Error(`saveReflection ${date}: ${error.message}`);
 }
 
