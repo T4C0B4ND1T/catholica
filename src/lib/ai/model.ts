@@ -1,6 +1,6 @@
 /** Single source for the AI model, a Vercel AI Gateway `provider/model` ID (safe to import anywhere). */
 export function aiModel(): string {
-  return process.env.AI_MODEL || 'openai/gpt-4.1-mini';
+  return process.env.AI_MODEL || 'openai/gpt-5-mini';
 }
 
 /**
@@ -8,7 +8,7 @@ export function aiModel(): string {
  * from another provider, so one provider's outage doesn't stop the readings job.
  */
 export function aiFallbackModels(): string[] {
-  const raw = process.env.AI_FALLBACK_MODELS ?? 'google/gemini-2.5-flash-lite';
+  const raw = process.env.AI_FALLBACK_MODELS ?? 'google/gemini-2.5-flash';
   return raw
     .split(',')
     .map((m) => m.trim())
