@@ -57,8 +57,9 @@ test.describe('Mass tab', () => {
     await expect(page.getByRole('heading', { name: 'Order of the Mass' })).toBeVisible();
   });
 
+  // A Sunday, so the Creed is said (on a weekday it is marked as left out and the badge skips it).
   test('posture badge follows scroll: Creed is Stand, Eucharistic Prayer is Kneel', async ({ page }) => {
-    await page.goto('/mass');
+    await page.goto('/mass?date=2098-06-01');
     const badge = page.getByTestId('posture-badge');
     await scrollTo(page, 'profession-of-faith');
     await expect(badge).toContainText('Stand');
@@ -68,11 +69,30 @@ test.describe('Mass tab', () => {
     await expect(badge).toContainText('Sit');
   });
 
+  // No readings saved, so the day's rank is unknown: the Gloria may still be said (a feast), the Creed is not.
+  test('a weekday marks the Creed as left out and the Gloria as possible', async ({ page }) => {
+    await page.goto('/mass?date=2098-06-03');
+    await expect(page.getByTestId('plan-note-gloria')).toHaveText('Said only if today is a feast or solemnity.');
+    await expect(page.locator('#profession-of-faith')).toContainText('Said only on Sundays and solemnities.');
+    await expect(page.locator('#profession-of-faith')).not.toHaveAttribute('data-step');
+  });
+
+  test('a Sunday of Advent drops the Gloria, keeps the Creed', async ({ page }) => {
+    await page.goto('/mass?date=2098-11-30');
+    await expect(page.locator('#gloria')).toContainText('Not sung on Sundays of Advent.');
+    await expect(page.locator('#profession-of-faith')).not.toContainText('Not today');
+  });
+
+  test('Lent uses the Lenten Gospel Acclamation', async ({ page }) => {
+    await page.goto('/mass?date=2098-03-09');
+    await expect(page.locator('#gospel-acclamation')).toContainText('Gospel Acclamation (Lenten)');
+  });
+
   test.describe('short viewport', () => {
     test.use({ viewport: { width: 390, height: 360 } });
 
     test('Creed shows Stand', async ({ page }) => {
-      await page.goto('/mass');
+      await page.goto('/mass?date=2098-06-01');
       await scrollTo(page, 'profession-of-faith');
       await expect(page.getByTestId('posture-badge')).toContainText('Stand');
     });
