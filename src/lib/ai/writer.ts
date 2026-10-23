@@ -1,15 +1,27 @@
 import 'server-only';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { generateText } from 'ai';
 import { fetchCatechism } from '@/lib/sources/catechism';
 import type { BulletinSummary, DailyReadings, ReflectionInsights } from '@/lib/types';
-import { geminiModel } from './model';
+import { aiFallbackModels, aiModel } from './model';
 import { parseBulletinSummary, parseInsights, parseQuestions } from './parse';
 
-/** Gemini can hang for most of a minute when busy; give up sooner so a cron run stays inside its time limit. */
+/** Give up on a slow answer so a cron run stays inside its time limit. AI Gateway's fallback model shares this budget. */
 const TIMEOUT_MS = 60_000;
-/** Short writing tasks need little reasoning; low thinking answers far faster and rarely hits the timeout. */
-const THINKING = { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } };
 
+/**
+ * One AI call through Vercel AI Gateway. On Vercel the gateway authenticates with the deployment's OIDC token, so no
+ * key is needed there; elsewhere set AI_GATEWAY_API_KEY.
+ */
+async function generate(prompt: string): Promise<string> {
+  const { text } = await generateText({
+    model: aiModel(),
+    prompt,
+    timeout: TIMEOUT_MS,
+    maxRetries: 1,
+    providerOptions: { gateway: { models: aiFallbackModels() } },
+  });
+  return text;
+}
 
 function promptFor(r: DailyReadings): string {
   const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
@@ -28,12 +40,8 @@ function promptFor(r: DailyReadings): string {
 
 /** AI reflection for the day. Stored only in `reflections`, never in a readings field. */
 export async function writeReflection(r: DailyReadings): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
-  const res = await ai.models.generateContent({ model: geminiModel(), contents: promptFor(r), config: THINKING });
-  const text = res.text?.trim();
-  if (!text) throw new Error('Gemini returned no text');
+  const text = (await generate(promptFor(r))).trim();
+  if (!text) throw new Error('The AI model returned no text');
   return text;
 }
 
@@ -42,9 +50,6 @@ export async function writeReflection(r: DailyReadings): Promise<string> {
  * exist at the source are kept, so every connection opens real Catechism text.
  */
 export async function writeInsights(r: DailyReadings): Promise<ReflectionInsights> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
   const prompt = [
     'From the Mass readings below, write study notes for a Catholic reader. Return JSON with exactly these keys:',
@@ -63,12 +68,7 @@ export async function writeInsights(r: DailyReadings): Promise<ReflectionInsight
     '',
     body,
   ].join('\n');
-  const res = await ai.models.generateContent({
-    model: geminiModel(),
-    contents: prompt,
-    config: { ...THINKING, responseMimeType: 'application/json' },
-  });
-  const insights = parseInsights(res.text ?? '');
+  const insights = parseInsights(await generate(prompt));
   const real = await Promise.all(
     insights.catechism.map((c) => fetchCatechism(c.paragraph).then((p) => (p ? c : null), () => null)),
   );
@@ -77,9 +77,6 @@ export async function writeInsights(r: DailyReadings): Promise<ReflectionInsight
 
 /** Three or four questions to think about before Sunday Mass. Stored beside the reflection, shown under an AI label. */
 export async function writeQuestions(r: DailyReadings): Promise<string[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const body = r.sections.map((s) => `${s.mass ? `${s.mass} · ` : ''}${s.title} (${s.citation})\n${s.text}`).join('\n\n');
   const prompt = [
     'Write questions for a Catholic reader to think and pray about while preparing for Sunday Mass, from the readings below.',
@@ -92,12 +89,7 @@ export async function writeQuestions(r: DailyReadings): Promise<string[]> {
     '',
     body,
   ].join('\n');
-  const res = await ai.models.generateContent({
-    model: geminiModel(),
-    contents: prompt,
-    config: { ...THINKING, responseMimeType: 'application/json' },
-  });
-  return parseQuestions(res.text ?? '');
+  return parseQuestions(await generate(prompt));
 }
 
 /** Bulletin text past this is mostly advertisers; the schedule and news come first. */
@@ -105,9 +97,6 @@ const BULLETIN_TEXT_LIMIT = 60_000;
 
 /** Mass and confession times and this week's announcements, read by AI from the bulletin's extracted text. */
 export async function summarizeBulletin(text: string): Promise<BulletinSummary> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const prompt = [
     'Below is the text of a Catholic parish bulletin, extracted from its PDF (layout lost, so columns may be mixed).',
     'Return JSON with exactly these keys:',
@@ -119,19 +108,11 @@ export async function summarizeBulletin(text: string): Promise<BulletinSummary> 
     '',
     text.slice(0, BULLETIN_TEXT_LIMIT),
   ].join('\n');
-  const res = await ai.models.generateContent({
-    model: geminiModel(),
-    contents: prompt,
-    config: { ...THINKING, responseMimeType: 'application/json' },
-  });
-  return parseBulletinSummary(res.text ?? '');
+  return parseBulletinSummary(await generate(prompt));
 }
 
 /** AI answer to a Catechism question. Shown only under an "AI answer" label, never as Catechism text. */
 export async function askCatechism(question: string): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { timeout: TIMEOUT_MS } });
   const prompt = [
     'Answer the question below for a Catholic reader, based on the Catechism of the Catholic Church.',
     'Rules: at most 150 words, plain language, no headings or lists.',
@@ -141,8 +122,7 @@ export async function askCatechism(question: string): Promise<string> {
     '',
     `Question: ${question}`,
   ].join('\n');
-  const res = await ai.models.generateContent({ model: geminiModel(), contents: prompt, config: THINKING });
-  const text = res.text?.trim();
-  if (!text) throw new Error('Gemini returned no text');
+  const text = (await generate(prompt)).trim();
+  if (!text) throw new Error('The AI model returned no text');
   return text;
 }

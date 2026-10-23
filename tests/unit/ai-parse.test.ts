@@ -38,6 +38,13 @@ describe('parseBulletinSummary', () => {
 });
 
 describe('parseInsights', () => {
+  it('reads JSON wrapped in a code fence', () => {
+    const i = parseInsights('```json\n' + JSON.stringify({ theology: 'T', catechism: [], prayer: 'P' }) + '\n```');
+    expect(i.theology).toBe('T');
+    expect(i.prayer).toBe('P');
+  });
+
+
   it('keeps valid Catechism items, at most four, without repeats', () => {
     const i = parseInsights(
       JSON.stringify({

@@ -1,5 +1,5 @@
 import { requireUser } from '@/lib/auth/require-user';
-import { askCatechism } from '@/lib/ai/gemini';
+import { askCatechism } from '@/lib/ai/writer';
 import { fetchCatechism } from '@/lib/sources/catechism';
 
 const MAX_QUESTION = 500;

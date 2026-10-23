@@ -346,18 +346,22 @@ async function prune(bulletinDate, assets) {
   }
 }
 
+// Prefetches run one at a time: two at once could interleave, and one's prune could drop what the other just saved.
+let prefetchQueue = Promise.resolve();
+
 self.addEventListener('message', (event) => {
   const data = event.data || {};
   if (data.type !== 'prefetch') return;
   const urls = (Array.isArray(data.urls) ? data.urls : []).filter((u) => typeof u === 'string' && u.startsWith('/') && !u.startsWith('//'));
   const assets = (Array.isArray(data.assets) ? data.assets : []).filter((u) => typeof u === 'string' && STATIC.test(u));
-  event.waitUntil(
-    (async () => {
-      await Promise.all([saveStatic(assets), ...urls.map((u) => prefetchOne(u).catch(() => {}))]);
-      // Without a known newest bulletin (none saved, or the lookup failed), bulletin entries are left alone.
-      const bulletinDate = typeof data.bulletinDate === 'string' && ISO_DATE.test(data.bulletinDate) ? data.bulletinDate : null;
-      await prune(bulletinDate, assets).catch(() => {});
-      if (event.source) event.source.postMessage({ type: 'prefetch-done' });
-    })(),
-  );
+  const run = prefetchQueue.then(async () => {
+    await Promise.all([saveStatic(assets), ...urls.map((u) => prefetchOne(u).catch(() => {}))]);
+    // Without a known newest bulletin (none saved, or the lookup failed), bulletin entries are left alone.
+    const bulletinDate = typeof data.bulletinDate === 'string' && ISO_DATE.test(data.bulletinDate) ? data.bulletinDate : null;
+    await prune(bulletinDate, assets).catch(() => {});
+    // Echo the request's id, so a page can tell its own prefetch's end from another one finishing first.
+    if (event.source) event.source.postMessage({ type: 'prefetch-done', id: data.id });
+  });
+  prefetchQueue = run.catch(() => {});
+  event.waitUntil(run);
 });
