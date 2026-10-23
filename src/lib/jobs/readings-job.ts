@@ -87,7 +87,7 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
       }
 
       try {
-        // Each AI step can take up to 40s, so none starts once the budget is spent; the next run picks them up.
+        // Each AI step can take up to 60s, so none starts once the budget is spent; the next run picks them up.
         if (clock() - started > budgetMs) throw new Error('AI skipped, time budget exceeded');
         if (!(await deps.hasReflection(date))) {
           await deps.saveReflection(date, await deps.writeReflection(readings));
