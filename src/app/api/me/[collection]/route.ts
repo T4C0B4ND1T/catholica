@@ -6,6 +6,8 @@ import { isCollection, isUuid, pickRow } from '@/lib/me/validate';
 import type { Collection } from '@/lib/offline/outbox';
 
 const DEFAULT_ROUTINES = ['Morning Offering', 'Angelus', 'Rosary', 'Examen'];
+/** Set on the user once they have routines, so deleting every routine later doesn't bring the defaults back. */
+const ROUTINES_SEEDED = 'routines_seeded';
 
 const COLUMNS: Record<Collection, string> = {
   notes: 'id, date, body, updated_at',
@@ -43,12 +45,19 @@ async function list(db: SupabaseClient, collection: Collection) {
   return q;
 }
 
-async function handle(ctx: Ctx, run: (c: Collection, userId: string, db: SupabaseClient) => Promise<Response>) {
+type User = Awaited<ReturnType<typeof requireUser>>;
+
+async function markRoutinesSeeded(db: SupabaseClient): Promise<void> {
+  const { error } = await db.auth.updateUser({ data: { [ROUTINES_SEEDED]: true } });
+  if (error) console.error('marking routines seeded failed', error.message);
+}
+
+async function handle(ctx: Ctx, run: (c: Collection, user: User, db: SupabaseClient) => Promise<Response>) {
   try {
     const user = await requireUser();
     const { collection } = await ctx.params;
     if (!isCollection(collection)) return json({ error: 'not found' }, 404);
-    return await run(collection, user.id, await createServerClient());
+    return await run(collection, user, await createServerClient());
   } catch (e) {
     if (e instanceof Response) return e;
     console.error('me api failed', e instanceof Error ? e.message : e);
@@ -57,18 +66,27 @@ async function handle(ctx: Ctx, run: (c: Collection, userId: string, db: Supabas
 }
 
 export function GET(_req: Request, ctx: Ctx) {
-  return handle(ctx, async (collection, userId, db) => {
+  return handle(ctx, async (collection, user, db) => {
+    const userId = user.id;
     let { data, error } = await list(db, collection);
     if (error) return json({ error: 'server error' }, 500);
-    if (collection === 'routines' && (data ?? []).length === 0) {
+    const seeded = user.metadata[ROUTINES_SEEDED] === true;
+    if (collection === 'routines' && !seeded) {
+      // First visit: give the four defaults. Users from before the flag already have routines and only get the flag.
+      // The flag is best-effort: if saving it fails, the next visit tries again.
+      if ((data ?? []).length > 0) {
+        await markRoutinesSeeded(db);
+        return json({ rows: data ?? [] });
+      }
       const defaults = DEFAULT_ROUTINES.map((name, i) => ({
         id: defaultRoutineId(userId, name),
         user_id: userId,
         name,
         sort_order: i,
       }));
-      const seeded = await db.from('routines').upsert(defaults, { onConflict: 'id', ignoreDuplicates: true });
-      if (seeded.error) return json({ error: 'server error' }, 500);
+      const saved = await db.from('routines').upsert(defaults, { onConflict: 'id', ignoreDuplicates: true });
+      if (saved.error) return json({ error: 'server error' }, 500);
+      await markRoutinesSeeded(db);
       ({ data, error } = await list(db, collection));
       if (error) return json({ error: 'server error' }, 500);
     }
@@ -77,7 +95,7 @@ export function GET(_req: Request, ctx: Ctx) {
 }
 
 export function POST(req: Request, ctx: Ctx) {
-  return handle(ctx, async (collection, userId, db) => {
+  return handle(ctx, async (collection, { id: userId }, db) => {
     const row = pickRow(collection, await req.json().catch(() => null));
     if (!row) return json({ error: 'invalid row' }, 400);
     const { error } = await db
@@ -94,7 +112,7 @@ export function POST(req: Request, ctx: Ctx) {
 }
 
 export function DELETE(req: Request, ctx: Ctx) {
-  return handle(ctx, async (collection, _userId, db) => {
+  return handle(ctx, async (collection, _user, db) => {
     const id = new URL(req.url).searchParams.get('id');
     if (!isUuid(id)) return json({ error: 'invalid id' }, 400);
     const { error } = await db.from(collection).delete().eq('id', id);

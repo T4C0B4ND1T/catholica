@@ -19,9 +19,10 @@ test.describe('Prayer library', () => {
     expect((await page.goto('/prayers/not-a-prayer'))?.status()).toBe(404);
   });
 
-  test('the Me tab links to the library', async ({ page }) => {
+  test('the Prayers tab opens the library', async ({ page }) => {
     await page.goto('/me');
-    await expect(page.getByRole('link', { name: /Prayer library/ })).toHaveAttribute('href', '/prayers');
+    await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Prayers' }).click();
+    await expect(page).toHaveURL(/\/prayers$/);
   });
 });
 

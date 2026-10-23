@@ -30,6 +30,11 @@ export default async function BulletinPage() {
 
   return (
     <>
+      <p className="mb-4 text-sm">
+        <Link href="/sunday" className="inline-flex min-h-11 items-center text-muted-foreground underline decoration-accent underline-offset-4">
+          ← Sunday prep
+        </Link>
+      </p>
       <h1 className="text-center font-display text-[2rem] leading-[1.1] tracking-[-0.02em]">Bulletin</h1>
       <p className="mt-2 mb-6 text-center text-muted-foreground">St. Anselm Parish</p>
 
