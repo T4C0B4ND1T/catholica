@@ -106,23 +106,25 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
       }
       const st = deps.study;
       if (st && clock() - started <= budgetMs && (await deps.hasReflection(date))) {
-        const want = st.level(date);
-        const have = await st.stored(date);
-        if (have === null || (ahead && have !== want)) {
-          try {
+        try {
+          const want = st.level(date);
+          const have = await st.stored(date);
+          if (have === null || (ahead && have !== want)) {
             await st.save(date, await st.write(readings, want));
             wrote = true;
-          } catch (e) {
-            notes.push(`study ${date}: ${errMessage(e)}`);
           }
+        } catch (e) {
+          notes.push(`study ${date}: ${errMessage(e)}`);
         }
       }
       const p = deps.personal;
       const personalDay = date === today || date === comingSunday(today);
-      if (p && ahead && personalDay && clock() - started <= budgetMs && !(await p.has(date))) {
+      if (p && ahead && personalDay && clock() - started <= budgetMs) {
         try {
-          await p.write(readings);
-          wrote = true;
+          if (!(await p.has(date))) {
+            await p.write(readings);
+            wrote = true;
+          }
         } catch (e) {
           notes.push(`personal ${date}: ${errMessage(e)}`);
         }

@@ -283,6 +283,21 @@ describe('runReadingsJob', () => {
     expect(deps.logRun).toHaveBeenCalledWith('readings', 'ok', expect.stringContaining('study 2026-10-21: timeout'));
   });
 
+  it('still writes Sunday questions when the study and personal lookups fail', async () => {
+    const study = {
+      level: () => 'brief' as const,
+      stored: vi.fn(async () => { throw new Error('column reflections.study does not exist'); }),
+      write: vi.fn(async () => ({ level: 'brief' as const, readings: [] })),
+      save: vi.fn(async () => {}),
+    };
+    const personal = { has: vi.fn(async () => { throw new Error('no table'); }), write: vi.fn(async () => {}) };
+    const questions = { has: vi.fn(async () => false), write: vi.fn(async () => ['Q?']), save: vi.fn(async () => {}) };
+    const deps = setup({ study, personal, questions, hasReflection: vi.fn(async () => true) });
+    await runReadingsJob(deps);
+    expect(questions.save).toHaveBeenCalledWith('2026-10-25', ['Q?']);
+    expect(study.write).not.toHaveBeenCalled();
+  });
+
   it('writes the personal reflection for today and the coming Sunday only, when missing', async () => {
     const written = new Set<string>(['2026-10-25']);
     const personal = {
