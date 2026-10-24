@@ -3,13 +3,22 @@
 import { useRef, useState } from "react";
 import { ReadingCard } from "@/components/ReadingCard";
 import { defaultMass, massNames, massSections, sectionForKind } from "@/lib/mass-options";
-import type { ReadingSection } from "@/lib/types";
+import type { ReadingSection, StudyGuide } from "@/lib/types";
 
 /**
  * Horizontal scroll-snap cards, one per section, with a pill row that jumps to a card. On a day of several Masses
- * (Christmas, a Vigil and Day) a Mass picker above the pills chooses which Mass's sections are shown.
+ * (Christmas, a Vigil and Day) a Mass picker above the pills chooses which Mass's sections are shown. Each card carries
+ * its reading's study notes when the day has a study guide.
  */
-export function ReadingsCarousel({ date, sections }: { date: string; sections: ReadingSection[] }) {
+export function ReadingsCarousel({
+  date,
+  sections,
+  study = null,
+}: {
+  date: string;
+  sections: ReadingSection[];
+  study?: StudyGuide | null;
+}) {
   const track = useRef<HTMLDivElement>(null);
   const masses = massNames(sections);
   const [mass, setMass] = useState<string | null>(() => defaultMass(sections));
@@ -97,6 +106,7 @@ export function ReadingsCarousel({ date, sections }: { date: string; sections: R
             date={date}
             item={m}
             legacyKind={sectionForKind(sections, m.section.kind)?.index === m.index ? m.section.kind : undefined}
+            study={study?.readings.find((r) => r.index === m.index)}
           />
         ))}
       </div>

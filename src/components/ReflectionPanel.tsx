@@ -1,4 +1,5 @@
 import { CatechismLink } from "@/components/CatechismLink";
+import { PersonalReflection } from "@/components/PersonalReflection";
 import type { ReflectionInsights } from "@/lib/types";
 
 function Part({ title, children }: { title: string; children: React.ReactNode }) {
@@ -11,10 +12,19 @@ function Part({ title, children }: { title: string; children: React.ReactNode })
 }
 
 /**
- * The day's AI reflection, collapsed: the homiletic reflection, then the biblical theology insight, Catechism
- * connections and prayer prompt when they are written. Always labeled; never part of a reading card.
+ * The day's AI reflection, collapsed: the short homily, how the readings connect, Catechism connections, the prayer
+ * prompt, and (signed in) the reader's own reflection. The study notes for each reading sit under that reading.
+ * Always labeled; never part of a reading's text.
  */
-export function ReflectionPanel({ text, insights }: { text: string | null; insights?: ReflectionInsights | null }) {
+export function ReflectionPanel({
+  date,
+  text,
+  insights,
+}: {
+  date: string;
+  text: string | null;
+  insights?: ReflectionInsights | null;
+}) {
   if (!text && !insights) return null;
   return (
     <details className="group rounded-lg border border-border bg-card" data-testid="reflection">
@@ -27,12 +37,12 @@ export function ReflectionPanel({ text, insights }: { text: string | null; insig
       <div className="border-t border-border px-6 py-4">
         <p className="mb-4 text-sm italic text-muted-foreground">Written by AI. Not Scripture and not Church teaching.</p>
         {text && (
-          <Part title="Homiletic reflection">
+          <Part title="Short homily">
             <p className="whitespace-pre-line">{text}</p>
           </Part>
         )}
         {insights?.theology && (
-          <Part title="Biblical theology insight">
+          <Part title="How the readings connect">
             <p className="whitespace-pre-line" data-testid="insight-theology">{insights.theology}</p>
           </Part>
         )}
@@ -55,6 +65,7 @@ export function ReflectionPanel({ text, insights }: { text: string | null; insig
             <p className="whitespace-pre-line" data-testid="insight-prayer">{insights.prayer}</p>
           </Part>
         )}
+        <PersonalReflection date={date} />
       </div>
     </details>
   );

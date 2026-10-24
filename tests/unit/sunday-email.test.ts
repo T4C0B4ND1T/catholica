@@ -44,6 +44,30 @@ describe('buildSundayEmail', () => {
     expect(e.html).not.toContain('<your>');
   });
 
+  it('puts study notes under each reading and adds the deeper notes and the personal reflection', () => {
+    const e = buildSundayEmail({
+      sunday: SUNDAY,
+      readings,
+      reflection: 'Homily text',
+      questions: null,
+      insights: { theology: 'One law of love', catechism: [{ paragraph: 2055, connection: 'The two commandments' }], prayer: 'Pray it' },
+      study: {
+        level: 'full',
+        readings: [{ index: 2, context: { who: 'Matthew', when: 'c. AD 80', where: 'Syria', why: 'A test' }, explanation: 'Jesus joins two commands.', reflection: 'Love today.' }],
+      },
+      personal: 'For Joel only',
+      bulletin: null,
+      siteUrl: 'https://x.test',
+    });
+    for (const t of ['Who: Matthew', 'Explanation: Jesus joins two commands.', 'SHORT HOMILY', 'CCC 2055: The two commandments', 'FOR YOU', 'For Joel only']) {
+      expect(e.text).toContain(t);
+    }
+    // The notes follow the Gospel, not the first reading.
+    expect(e.text.indexOf('Who: Matthew')).toBeGreaterThan(e.text.indexOf('with all your heart.'));
+    expect(e.html).toContain('Study notes · written by AI');
+    expect(e.html).toContain('Going deeper');
+  });
+
   it('still builds when nothing is saved yet', () => {
     const e = buildSundayEmail({ sunday: SUNDAY, readings: null, reflection: null, questions: null, bulletin: null, siteUrl: 'https://x.test' });
     expect(e.subject).toBe('Sunday prep: This Sunday');

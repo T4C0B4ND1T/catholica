@@ -1,13 +1,19 @@
 import { addDays, formatDay, todayInChicago } from '@/lib/dates';
 import { comingSunday, liturgicalDay } from '@/lib/liturgical/calendar';
 import { defaultMass, massSections } from '@/lib/mass-options';
-import type { BulletinSummary, DailyReadings, Season } from '@/lib/types';
+import type { BulletinSummary, DailyReadings, ReadingStudy, ReflectionInsights, Season, StudyGuide } from '@/lib/types';
 
 export interface SundayEmailContent {
   sunday: string;
   readings: DailyReadings | null;
+  /** The short homily. */
   reflection: string | null;
   questions: string[] | null;
+  insights?: ReflectionInsights | null;
+  /** Study notes, shown under each reading. */
+  study?: StudyGuide | null;
+  /** The reader's personal reflection for the Sunday. */
+  personal?: string | null;
   /** The newest bulletin, when it is this Sunday's or the one before. */
   bulletin: { sundayDate: string; summary: BulletinSummary | null } | null;
   siteUrl: string;
@@ -69,7 +75,36 @@ function glanceRows(rows: [string, string][]): string {
 
 const list = (items: string[]) => items.map((t) => esc(t)).join('<br>');
 
-/** The Saturday email: the coming Sunday at a glance, every reading in full, the reflection and questions, and the bulletin. */
+const subhead = (t: string) =>
+  `<p style="margin:14px 0 4px;font-family:${SANS};font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:${MUTED}">${esc(t)}</p>`;
+
+/** One reading's study notes, in a tinted box under the reading. */
+function studyBox(st: ReadingStudy): string {
+  const ctx = (['who', 'when', 'where', 'why'] as const)
+    .filter((k) => st.context[k])
+    .map((k) => `<strong>${k[0].toUpperCase()}${k.slice(1)}:</strong> ${esc(st.context[k])}`)
+    .join('<br>');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 8px;background:#FAF8F3;border-left:3px solid ${GOLD};border-radius:4px"><tr><td style="padding:12px 16px">
+${smallCaps('Study notes · written by AI', GOLD_INK)}
+${ctx ? subhead('Context') + `<p style="margin:0;font-family:${SANS};font-size:15px;line-height:1.6;color:${INK}">${ctx}</p>` : ''}
+${subhead('Explanation')}${paras(st.explanation, SANS, 15)}
+${st.reflection ? subhead('Reflection') + paras(st.reflection, SANS, 15) : ''}
+</td></tr></table>`;
+}
+
+/** Study notes as plain text. */
+function studyText(st: ReadingStudy): string[] {
+  const out = ['Study notes (written by AI):'];
+  for (const k of ['who', 'when', 'where', 'why'] as const) if (st.context[k]) out.push(`${k[0].toUpperCase()}${k.slice(1)}: ${st.context[k]}`);
+  out.push(`Explanation: ${st.explanation}`);
+  if (st.reflection) out.push(`Reflection: ${st.reflection}`);
+  return out;
+}
+
+/**
+ * The Saturday email: the coming Sunday at a glance, every reading in full with its study notes, the short homily,
+ * the deeper notes, the reader's own reflection, the questions, and the bulletin.
+ */
 export function buildSundayEmail(c: SundayEmailContent): Email {
   const day = formatDay(c.sunday);
   const title = c.readings?.feast || 'This Sunday';
@@ -79,13 +114,21 @@ export function buildSundayEmail(c: SundayEmailContent): Email {
   const gospel = sections.find((s) => s.section.kind === 'gospel')?.section;
   const summary = c.bulletin?.summary;
   const bulletinDay = c.bulletin ? formatDay(c.bulletin.sundayDate) : '';
+  const studyFor = (index: number) => c.study?.readings.find((r) => r.index === index);
 
   // Plain-text part, for clients that don't show HTML.
   const text: string[] = [title, `${day} · ${SEASON_NAMES[lit.season]} · Year ${lit.sundayCycle}`, ''];
   if (sections.length) {
-    for (const s of sections) text.push(`${s.label.toUpperCase()} · ${s.section.citation}`, s.section.text, '');
+    for (const s of sections) {
+      const st = studyFor(s.index);
+      text.push(`${s.label.toUpperCase()} · ${s.section.citation}`, s.section.text, '', ...(st ? [...studyText(st), ''] : []));
+    }
   } else text.push("The readings for this Sunday aren't saved yet.", '');
-  if (c.reflection) text.push('REFLECTION (written by AI, not Scripture or Church teaching)', c.reflection, '');
+  if (c.reflection) text.push('SHORT HOMILY (written by AI, not Scripture or Church teaching)', c.reflection, '');
+  if (c.insights?.theology) text.push('HOW THE READINGS CONNECT', c.insights.theology, '');
+  if (c.insights?.catechism.length) text.push('CATECHISM CONNECTIONS', ...c.insights.catechism.map((x) => `CCC ${x.paragraph}: ${x.connection}`), '');
+  if (c.insights?.prayer) text.push('PRAYER PROMPT', c.insights.prayer, '');
+  if (c.personal) text.push('FOR YOU (written by AI from your notes and intentions)', c.personal, '');
   if (c.questions?.length) text.push('QUESTIONS TO PRAY WITH', ...c.questions.map((q, i) => `${i + 1}. ${q}`), '');
   if (summary) {
     text.push(`BULLETIN · ${bulletinDay} (summarized by AI)`);
@@ -128,7 +171,7 @@ ${smallCaps('At a glance', GOLD_INK)}
             .map(
               (s, i) => `<p style="margin:${i ? '22px' : '0'} 0 2px;font-family:${SERIF};font-size:20px;line-height:1.3;color:${INK}">${esc(s.label)}</p>
 <p style="margin:0 0 10px;font-family:${SANS};font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${MUTED}">${esc(s.section.citation)}</p>
-${paras(s.section.text)}`,
+${paras(s.section.text)}${studyFor(s.index) ? studyBox(studyFor(s.index)!) : ''}`,
             )
             .join('')
         : paras("The readings for this Sunday aren't saved yet. They arrive about a week ahead.", SANS, 16),
@@ -136,7 +179,25 @@ ${paras(s.section.text)}`,
   );
 
   if (c.reflection) {
-    rows.push(section('Reflection', aiNote('Written by AI. Not Scripture and not Church teaching.') + paras(c.reflection, SANS, 16)));
+    rows.push(section('Short homily', aiNote('Written by AI. Not Scripture and not Church teaching.') + paras(c.reflection, SANS, 16)));
+  }
+
+  const ins = c.insights;
+  if (ins) {
+    const parts = [
+      ins.theology && subhead('How the readings connect') + paras(ins.theology, SANS, 16),
+      ins.catechism.length &&
+        subhead('Catechism connections') +
+          ins.catechism
+            .map((x) => `<p style="margin:0 0 10px;font-family:${SANS};font-size:16px;line-height:1.6;color:${INK}"><strong>CCC ${x.paragraph}</strong> · ${esc(x.connection)}</p>`)
+            .join(''),
+      ins.prayer && subhead('Prayer prompt') + paras(ins.prayer, SANS, 16),
+    ].filter(Boolean);
+    if (parts.length) rows.push(section('Going deeper', aiNote('Written by AI. Not Scripture and not Church teaching.') + parts.join('')));
+  }
+
+  if (c.personal) {
+    rows.push(section('For you', aiNote('Written by AI from your notes and intentions.') + paras(c.personal, SANS, 16)));
   }
 
   if (c.questions?.length) {
@@ -195,6 +256,10 @@ export interface SundayEmailDeps {
   getReadings: (date: string) => Promise<DailyReadings | null>;
   getReflection: (date: string) => Promise<string | null>;
   getQuestions: (date: string) => Promise<string[] | null>;
+  getInsights?: (date: string) => Promise<ReflectionInsights | null>;
+  getStudy?: (date: string) => Promise<StudyGuide | null>;
+  /** The reader's personal reflection for the date, if one is written. */
+  getPersonal?: (date: string) => Promise<string | null>;
   latestBulletin: () => Promise<{ sundayDate: string } | null>;
   getBulletinSummary: (date: string) => Promise<BulletinSummary | null>;
   /** Sends the email; false when email isn't set up (no Resend key or address). */
@@ -208,17 +273,31 @@ export interface SundayEmailDeps {
 export async function runSundayEmailJob(deps: SundayEmailDeps): Promise<{ status: 'sent' | 'not-configured' | 'error'; sunday: string; message?: string }> {
   const sunday = comingSunday(todayInChicago(deps.now));
   try {
-    const [readings, reflection, questions, newest] = await Promise.all([
+    const none = async () => null;
+    const [readings, reflection, questions, insights, study, personal, newest] = await Promise.all([
       deps.getReadings(sunday),
       deps.getReflection(sunday),
       deps.getQuestions(sunday),
+      (deps.getInsights ?? none)(sunday),
+      (deps.getStudy ?? none)(sunday),
+      (deps.getPersonal ?? none)(sunday).catch(() => null),
       deps.latestBulletin().catch(() => null),
     ]);
     const week = newest && newest.sundayDate >= addDays(sunday, -7) ? newest : null;
     const bulletin = week ? { sundayDate: week.sundayDate, summary: await deps.getBulletinSummary(week.sundayDate) } : null;
-    const email = buildSundayEmail({ sunday, readings, reflection, questions, bulletin, siteUrl: deps.siteUrl });
+    const email = buildSundayEmail({
+      sunday,
+      readings,
+      reflection,
+      questions,
+      insights,
+      study,
+      personal,
+      bulletin,
+      siteUrl: deps.siteUrl,
+    });
     const sent = await deps.send(email);
-    const missing = [!readings && 'readings', !reflection && 'reflection', !questions && 'questions'].filter(Boolean);
+    const missing = [!readings && 'readings', !reflection && 'reflection', deps.getStudy && !study && 'study guide', !questions && 'questions'].filter(Boolean);
     const message = `${sent ? 'sent' : 'not sent (email not set up)'} for ${sunday}${missing.length ? `; missing ${missing.join(', ')}` : ''}`;
     await deps.logRun('sunday-email', sent ? 'ok' : 'error', message);
     return { status: sent ? 'sent' : 'not-configured', sunday, message };

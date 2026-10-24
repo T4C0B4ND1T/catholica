@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ readReadings: vi.fn(), readReflection: vi.fn(), getInsights: vi.fn() }));
+const db = vi.hoisted(() => ({ readReadings: vi.fn(), readReflection: vi.fn(), getInsights: vi.fn(), getStudy: vi.fn() }));
 vi.mock('@/lib/db/readings', () => db);
 
 import { GET } from '@/app/api/readings/[date]/route';
@@ -13,6 +13,7 @@ describe('GET /api/readings/[date]', () => {
     db.readReadings.mockReset();
     db.readReflection.mockReset();
     db.getInsights.mockReset().mockResolvedValue({ theology: 'T', catechism: [], prayer: 'P' });
+    db.getStudy.mockReset().mockResolvedValue({ level: 'brief', readings: [] });
   });
 
   it('caches a complete day for an hour', async () => {
@@ -28,6 +29,15 @@ describe('GET /api/readings/[date]', () => {
     const res = await call('2026-10-21');
     expect(res.headers.get('Cache-Control')).toBe('public, s-maxage=60');
     expect((await res.json()).insights).toBeNull();
+  });
+
+  it('caches a day still missing its study guide only briefly, and returns it', async () => {
+    db.readReadings.mockResolvedValue(readings);
+    db.readReflection.mockResolvedValue('A reflection');
+    db.getStudy.mockResolvedValue(null);
+    const res = await call('2026-10-21');
+    expect(res.headers.get('Cache-Control')).toBe('public, s-maxage=60');
+    expect((await res.json()).study).toBeNull();
   });
 
   it('caches a day still missing its reflection only briefly', async () => {

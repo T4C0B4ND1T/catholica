@@ -64,7 +64,22 @@ test.describe('Today tab', () => {
     if (rows.error) throw rows.error;
     const reflection = await admin
       .from('reflections')
-      .upsert({ date: SUNDAY, text: 'SYNTHETIC REFLECTION TEXT (not real)', model: 'synthetic' });
+      .upsert({
+        date: SUNDAY,
+        text: 'SYNTHETIC REFLECTION TEXT (not real)',
+        model: 'synthetic',
+        study: {
+          level: 'full',
+          readings: [
+            {
+              index: 4,
+              context: { who: 'SYNTHETIC WHO', when: 'SYNTHETIC WHEN', where: '', why: 'SYNTHETIC WHY' },
+              explanation: 'SYNTHETIC EXPLANATION',
+              reflection: 'SYNTHETIC STUDY REFLECTION',
+            },
+          ],
+        },
+      });
     if (reflection.error) throw reflection.error;
     const bulletin = await admin
       .from('bulletins')
@@ -170,12 +185,22 @@ test.describe('Today tab', () => {
         .toBe(true);
 
       // Reading text style.
-      const style = await gospel.locator('p.whitespace-pre-line').evaluate((el) => {
+      const style = await gospel.locator('p.whitespace-pre-line').first().evaluate((el) => {
         const s = getComputedStyle(el);
         return { size: s.fontSize, line: parseFloat(s.lineHeight) / parseFloat(s.fontSize) };
       });
       expect(style.size).toBe('19px');
       expect(style.line).toBeCloseTo(1.75, 2);
+
+      // Study notes: under their own reading, collapsed and labeled as AI; none under a reading without notes.
+      const notes = gospel.getByTestId('study-notes');
+      await expect(notes.getByText('SYNTHETIC EXPLANATION')).toBeHidden();
+      await notes.getByText('Study notes').click();
+      await expect(notes.getByText('SYNTHETIC EXPLANATION')).toBeVisible();
+      await expect(notes.getByText('SYNTHETIC WHO')).toBeVisible();
+      await expect(notes.getByText('Written by AI. Not Scripture and not Church teaching.')).toBeVisible();
+      await expect(notes.getByText('Where:')).toHaveCount(0);
+      await expect(page.locator('[data-card="reading1"]').getByTestId('study-notes')).toHaveCount(0);
 
       // Reflection: labeled, collapsed, and outside every reading card.
       const reflection = page.getByTestId('reflection');

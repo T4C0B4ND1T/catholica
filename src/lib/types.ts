@@ -57,3 +57,24 @@ export interface BulletinSummary {
   confession: string[];
   announcements: { title: string; text: string }[];
 }
+
+/** How much the study guide says: brief notes, or the full study. */
+export type StudyLevel = 'brief' | 'full';
+
+/** The reader's depth setting: brief every day, in depth on Sundays and holy days only, or in depth every day. */
+export type StudyDepth = 'brief' | 'sundays' | 'deep';
+
+/** AI study notes for one reading. Shown under that reading, always labeled as AI. */
+export interface ReadingStudy {
+  /** The reading's index in the day's `sections`. */
+  index: number;
+  context: { who: string; when: string; where: string; why: string };
+  explanation: string;
+  reflection: string;
+}
+
+/** The day's AI study guide: notes for each First Reading, Psalm, Second Reading and Gospel of every Mass. */
+export interface StudyGuide {
+  level: StudyLevel;
+  readings: ReadingStudy[];
+}

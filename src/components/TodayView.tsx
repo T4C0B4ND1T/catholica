@@ -10,7 +10,7 @@ import { liturgicalDay } from "@/lib/liturgical/calendar";
 import { upcomingHolyDay } from "@/lib/liturgical/holy-days";
 import { saintsOfDay } from "@/lib/liturgical/saints";
 import { usccbUrl } from "@/lib/sources/usccb-url";
-import type { DailyReadings, LitColor, Season, ReflectionInsights } from "@/lib/types";
+import type { DailyReadings, LitColor, Season, ReflectionInsights, StudyGuide } from "@/lib/types";
 
 const SEASONS: Record<Season, string> = {
   advent: "Advent",
@@ -71,6 +71,7 @@ export function TodayView({
   readings,
   reflection,
   insights = null,
+  study = null,
   missing = "unsaved",
   children,
 }: {
@@ -79,6 +80,8 @@ export function TodayView({
   readings: DailyReadings | null;
   reflection: string | null;
   insights?: ReflectionInsights | null;
+  /** The study notes shown under each reading. */
+  study?: StudyGuide | null;
   /** Shown in place of the readings when there are none. */
   missing?: MissingReason;
   /** Extra cards after the reflection (This Sunday). */
@@ -130,7 +133,7 @@ export function TodayView({
       )}
 
       {readings && sections.length > 0 ? (
-        <ReadingsCarousel key={date} date={date} sections={sections} />
+        <ReadingsCarousel key={date} date={date} sections={sections} study={study} />
       ) : (
         <Missing date={date} reason={missing} />
       )}
@@ -141,7 +144,7 @@ export function TodayView({
         </Link>
       </div>
 
-      <ReflectionPanel text={reflection} insights={insights} />
+      <ReflectionPanel date={date} text={reflection} insights={insights} />
 
       {children}
 

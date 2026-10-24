@@ -14,6 +14,7 @@ import {
 } from "@/lib/speech-settings";
 import { Button } from "@/components/ui/Button";
 import { OfflineStatus } from "@/components/OfflineStatus";
+import { StudyDepthSetting } from "@/components/me/StudyDepthSetting";
 import { MAX_TEXT_SCALE, MIN_TEXT_SCALE, useTheme, type ThemePreference } from "./ThemeProvider";
 
 const THEMES: { value: ThemePreference; label: string }[] = [
@@ -148,6 +149,8 @@ export function SettingsPanel({ signedIn }: { signedIn: boolean }) {
           className="mt-1 h-11 w-full accent-accent"
         />
       </div>
+
+      {signedIn && <StudyDepthSetting />}
 
       <OfflineStatus />
 

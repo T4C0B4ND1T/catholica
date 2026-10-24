@@ -1,5 +1,6 @@
 import { addDays, dayOfWeek, todayInChicago } from '@/lib/dates';
-import type { DailyReadings, ReflectionInsights } from '@/lib/types';
+import { comingSunday } from '@/lib/liturgical/calendar';
+import type { DailyReadings, ReflectionInsights, StudyGuide, StudyLevel } from '@/lib/types';
 
 const WINDOW_DAYS = 7;
 const MAX_ATTEMPTS = 3;
@@ -33,6 +34,21 @@ export interface ReadingsJobDeps {
     write: (r: DailyReadings) => Promise<ReflectionInsights>;
     save: (date: string, insights: ReflectionInsights) => Promise<void>;
   };
+  /**
+   * The study guide for each reading, written after the reflection. A day in the coming week whose stored guide is at
+   * another level than `level` wants (the reader changed their depth setting) is written again.
+   */
+  study?: {
+    level: (date: string) => StudyLevel;
+    stored: (date: string) => Promise<StudyLevel | null>;
+    write: (r: DailyReadings, level: StudyLevel) => Promise<StudyGuide>;
+    save: (date: string, study: StudyGuide) => Promise<void>;
+  };
+  /** The reader's personal reflection, written for today and the coming Sunday when missing. */
+  personal?: {
+    has: (date: string) => Promise<boolean>;
+    write: (r: DailyReadings) => Promise<void>;
+  };
   logRun: (job: 'readings' | 'bulletin', status: 'ok' | 'error', message: string) => Promise<void>;
   alert: (subject: string, body: string) => Promise<void>;
   now: Date;
@@ -64,8 +80,12 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
   const budgetMs = deps.budgetMs ?? DEFAULT_BUDGET_MS;
   const started = clock();
 
-  /** Writes whatever AI pieces `date` lacks: the reflection, then its insights, and on a Sunday the prep questions. */
-  const fillAi = async (date: string, readings: DailyReadings): Promise<boolean> => {
+  /**
+   * Writes whatever AI pieces `date` lacks: the reflection, then its insights and study guide, on a Sunday the prep
+   * questions, and for today and the coming Sunday the reader's personal reflection. Only `ahead` days (today on)
+   * rewrite a study guide at another level or get a personal reflection.
+   */
+  const fillAi = async (date: string, readings: DailyReadings, ahead: boolean): Promise<boolean> => {
     let wrote = false;
     try {
       // Each AI step can take up to 2 minutes (60s per model), so none starts once the budget is spent; the next run picks them up.
@@ -82,6 +102,29 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
           wrote = true;
         } catch (e) {
           notes.push(`insights ${date}: ${errMessage(e)}`);
+        }
+      }
+      const st = deps.study;
+      if (st && clock() - started <= budgetMs && (await deps.hasReflection(date))) {
+        const want = st.level(date);
+        const have = await st.stored(date);
+        if (have === null || (ahead && have !== want)) {
+          try {
+            await st.save(date, await st.write(readings, want));
+            wrote = true;
+          } catch (e) {
+            notes.push(`study ${date}: ${errMessage(e)}`);
+          }
+        }
+      }
+      const p = deps.personal;
+      const personalDay = date === today || date === comingSunday(today);
+      if (p && ahead && personalDay && clock() - started <= budgetMs && !(await p.has(date))) {
+        try {
+          await p.write(readings);
+          wrote = true;
+        } catch (e) {
+          notes.push(`personal ${date}: ${errMessage(e)}`);
         }
       }
       const q = deps.questions;
@@ -120,7 +163,7 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
         saved.push(date);
       }
 
-      await fillAi(date, readings);
+      await fillAi(date, readings, true);
     } catch (e) {
       failed.push(date);
       notes.push(`readings ${date}: ${errMessage(e)}`);
@@ -133,7 +176,7 @@ export async function runReadingsJob(deps: ReadingsJobDeps): Promise<{ saved: st
     const date = addDays(today, -i);
     try {
       const readings = await deps.getReadings(date);
-      if (readings && (await fillAi(date, readings))) caughtUp.push(date);
+      if (readings && (await fillAi(date, readings, false))) caughtUp.push(date);
     } catch (e) {
       notes.push(`catch-up ${date}: ${errMessage(e)}`);
     }

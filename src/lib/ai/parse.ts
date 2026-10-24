@@ -1,6 +1,6 @@
 /** Parsers for the AI model's JSON answers (safe to import anywhere). */
 
-import type { BulletinSummary, ReflectionInsights } from '@/lib/types';
+import type { BulletinSummary, ReadingStudy, ReflectionInsights } from '@/lib/types';
 
 /** The JSON inside an answer, without the ```json fence some models wrap it in. */
 function unfence(text: string): string {
@@ -70,4 +70,40 @@ export function parseInsights(text: string): ReflectionInsights {
     .filter((c) => !seen.has(c.paragraph) && seen.add(c.paragraph))
     .slice(0, 4);
   return { theology, catechism, prayer };
+}
+
+const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * The study notes from the model's JSON answer, keeping only readings in `indexes`, once each, with an explanation.
+ * Throws when it is not JSON or no reading in `indexes` has notes.
+ */
+export function parseStudy(answer: string, indexes: number[]): ReadingStudy[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(unfence(answer));
+  } catch {
+    throw new Error('The AI model returned study notes that are not JSON');
+  }
+  const v = (typeof value === 'object' && value !== null ? value : {}) as Record<string, unknown>;
+  const list = Array.isArray(value) ? value : Array.isArray(v.readings) ? v.readings : [];
+  const wanted = new Set(indexes);
+  const out: ReadingStudy[] = [];
+  for (const item of list) {
+    const r = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
+    const index = Number(r.index);
+    if (!wanted.has(index)) continue;
+    const c = (typeof r.context === 'object' && r.context !== null ? r.context : {}) as Record<string, unknown>;
+    const study: ReadingStudy = {
+      index,
+      context: { who: text(c.who), when: text(c.when), where: text(c.where), why: text(c.why) },
+      explanation: text(r.explanation),
+      reflection: text(r.reflection),
+    };
+    if (!study.explanation) continue;
+    wanted.delete(index);
+    out.push(study);
+  }
+  if (out.length === 0) throw new Error('The AI model returned no study notes');
+  return out.sort((a, b) => a.index - b.index);
 }
