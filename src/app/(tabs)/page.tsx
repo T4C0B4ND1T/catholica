@@ -3,7 +3,7 @@ import { TodayOffline } from "@/components/TodayOffline";
 import { TodayView } from "@/components/TodayView";
 import { dateParam, todayInChicago } from "@/lib/dates";
 import { latestBulletin } from "@/lib/db/bulletins";
-import { getInsights, getReadings, getReflection, readReadings } from "@/lib/db/readings";
+import { getInsights, getReadings, getReflection, getStudy, readReadings } from "@/lib/db/readings";
 import { showsThisSunday } from "@/lib/this-sunday";
 import { comingSunday } from "@/lib/liturgical/calendar";
 import type { Bulletin, DailyReadings } from "@/lib/types";
@@ -22,7 +22,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
   const date = dateParam((await searchParams).date) ?? today;
   const sunday = showsThisSunday(date) ? comingSunday(date) : null;
 
-  const [lookup, reflection, insights, sundayReadings, bulletin] = await Promise.all([
+  const [lookup, reflection, insights, study, sundayReadings, bulletin] = await Promise.all([
     readReadings(date).then(
       (r): { readings: DailyReadings | null; failed: boolean } => ({ readings: r, failed: false }),
       (e) => {
@@ -32,6 +32,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
     ),
     getReflection(date),
     getInsights(date),
+    getStudy(date),
     sunday ? getReadings(sunday) : Promise.resolve(null),
     sunday ? safeLatestBulletin() : Promise.resolve(null),
   ]);
@@ -44,6 +45,7 @@ export default async function TodayPage({ searchParams }: { searchParams: Promis
         readings={lookup.readings}
         reflection={reflection}
         insights={insights}
+        study={study}
         missing={lookup.failed ? "failed" : "unsaved"}
       >
         {sunday && <ThisSundayCard sunday={sunday} readings={sundayReadings} bulletin={bulletin} />}

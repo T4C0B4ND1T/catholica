@@ -1,5 +1,5 @@
 import 'server-only';
-import type { DailyReadings, ReadingSection, ReflectionInsights } from '@/lib/types';
+import type { DailyReadings, ReadingSection, ReflectionInsights, StudyGuide, StudyLevel } from '@/lib/types';
 import { aiModel } from '@/lib/ai/model';
 import { liturgicalDay } from '@/lib/liturgical/calendar';
 import { createAdminClient } from './admin';
@@ -137,4 +137,32 @@ export async function hasInsights(date: string): Promise<boolean> {
 export async function saveInsights(date: string, insights: ReflectionInsights): Promise<void> {
   const { error } = await createAdminClient().from('reflections').update({ insights }).eq('date', date);
   if (error) throw new Error(`saveInsights ${date}: ${error.message}`);
+}
+
+/** The day's AI study guide, or null when none is stored (or the lookup fails, so pages still render). */
+export async function getStudy(date: string): Promise<StudyGuide | null> {
+  try {
+    const supabase = await createServerClient();
+    const { data, error } = await supabase.from('reflections').select('study').eq('date', date).maybeSingle();
+    if (error) throw new Error(error.message);
+    const study = data?.study as StudyGuide | null | undefined;
+    return study && Array.isArray(study.readings) ? study : null;
+  } catch (e) {
+    console.error('getStudy failed', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** The level of the day's stored study guide, or null when there is none. */
+export async function studyLevelStored(date: string): Promise<StudyLevel | null> {
+  const { data, error } = await createAdminClient().from('reflections').select('study').eq('date', date).maybeSingle();
+  if (error) throw new Error(`studyLevelStored ${date}: ${error.message}`);
+  const level = (data?.study as StudyGuide | null | undefined)?.level;
+  return level === 'brief' || level === 'full' ? level : null;
+}
+
+/** Stores the study guide on the day's reflection row, which must already exist. */
+export async function saveStudy(date: string, study: StudyGuide): Promise<void> {
+  const { error } = await createAdminClient().from('reflections').update({ study }).eq('date', date);
+  if (error) throw new Error(`saveStudy ${date}: ${error.message}`);
 }

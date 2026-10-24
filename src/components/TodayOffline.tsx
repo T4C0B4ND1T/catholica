@@ -4,13 +4,14 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { TodayView, type MissingReason } from "@/components/TodayView";
 import { dateParam, todayInChicago } from "@/lib/dates";
-import type { DailyReadings, ReflectionInsights } from "@/lib/types";
+import type { DailyReadings, ReflectionInsights, StudyGuide } from "@/lib/types";
 
 type Loaded = {
   date: string;
   readings: DailyReadings | null;
   reflection: string | null;
   insights?: ReflectionInsights | null;
+  study?: StudyGuide | null;
   missing: MissingReason;
 };
 
@@ -42,8 +43,16 @@ export function TodayOffline({ renderedDate, children }: { renderedDate: string;
           readings: DailyReadings | null;
           reflection: string | null;
           insights?: ReflectionInsights | null;
+          study?: StudyGuide | null;
         };
-        done({ date: wanted, readings: body.readings, reflection: body.reflection, insights: body.insights, missing: "unsaved" });
+        done({
+          date: wanted,
+          readings: body.readings,
+          reflection: body.reflection,
+          insights: body.insights,
+          study: body.study,
+          missing: "unsaved",
+        });
       })
       // No network and nothing cached for this day.
       .catch(() => done({ date: wanted, readings: null, reflection: null, missing: "offline" }));
@@ -61,6 +70,7 @@ export function TodayOffline({ renderedDate, children }: { renderedDate: string;
       readings={current?.readings ?? null}
       reflection={current?.reflection ?? null}
       insights={current?.insights ?? null}
+      study={current?.study ?? null}
       missing={current?.missing ?? "loading"}
     />
   );

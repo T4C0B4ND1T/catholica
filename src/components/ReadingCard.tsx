@@ -1,11 +1,25 @@
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { SpeakButton } from "@/components/SpeakButton";
+import { StudyNotes } from "@/components/StudyNotes";
 import { Card } from "@/components/ui/Card";
 import { bookmarkKey, fullLabel, type MassSection } from "@/lib/mass-options";
-import type { ReadingKind } from "@/lib/types";
+import type { ReadingKind, ReadingStudy } from "@/lib/types";
 
-/** One saved reading. Text comes only from the saved section; AI text never appears here. */
-export function ReadingCard({ date, item, legacyKind }: { date: string; item: MassSection; legacyKind?: ReadingKind }) {
+/**
+ * One saved reading. Its text comes only from the saved section; AI study notes, when there are any, sit below it in
+ * their own labeled, collapsed block.
+ */
+export function ReadingCard({
+  date,
+  item,
+  legacyKind,
+  study,
+}: {
+  date: string;
+  item: MassSection;
+  legacyKind?: ReadingKind;
+  study?: ReadingStudy;
+}) {
   const { section, index, label } = item;
   const featured = section.kind === "gospel";
   return (
@@ -33,6 +47,7 @@ export function ReadingCard({ date, item, legacyKind }: { date: string; item: Ma
         </div>
       </div>
       <p className="mt-4 max-w-[34em] whitespace-pre-line text-[length:calc(19px*var(--text-scale,1))] leading-[1.75]">{section.text}</p>
+      {study && <StudyNotes study={study} />}
     </Card>
   );
 }

@@ -9,7 +9,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { addDays, dateParam, formatDay, todayInChicago } from "@/lib/dates";
 import { getBulletinSummary, latestBulletin } from "@/lib/db/bulletins";
 import { BulletinSummaryCard } from "@/components/BulletinSummaryCard";
-import { getInsights, getQuestions, getReadings, getReflection } from "@/lib/db/readings";
+import { getInsights, getQuestions, getReadings, getReflection, getStudy } from "@/lib/db/readings";
 import { comingSunday } from "@/lib/liturgical/calendar";
 import { defaultMass, massSections } from "@/lib/mass-options";
 import { usccbUrl } from "@/lib/sources/usccb-url";
@@ -29,10 +29,11 @@ async function safeLatestBulletin(): Promise<Bulletin | null> {
 /** Everything for preparing for one Sunday: its readings, the AI reflection and questions, a note, and the bulletin. */
 export default async function SundayPrepPage({ searchParams }: { searchParams: Promise<{ date?: string | string[] }> }) {
   const sunday = comingSunday(dateParam((await searchParams).date) ?? todayInChicago());
-  const [readings, reflection, insights, questions, bulletin] = await Promise.all([
+  const [readings, reflection, insights, study, questions, bulletin] = await Promise.all([
     getReadings(sunday),
     getReflection(sunday),
     getInsights(sunday),
+    getStudy(sunday),
     getQuestions(sunday),
     safeLatestBulletin(),
   ]);
@@ -61,7 +62,7 @@ export default async function SundayPrepPage({ searchParams }: { searchParams: P
       {sections.length > 0 ? (
         <div className="space-y-6" data-testid="prep-readings">
           {sections.map((item) => (
-            <ReadingCard key={item.index} date={sunday} item={item} />
+            <ReadingCard key={item.index} date={sunday} item={item} study={study?.readings.find((r) => r.index === item.index)} />
           ))}
         </div>
       ) : (
@@ -73,7 +74,7 @@ export default async function SundayPrepPage({ searchParams }: { searchParams: P
         </Card>
       )}
 
-      <ReflectionPanel text={reflection} insights={insights} />
+      <ReflectionPanel date={sunday} text={reflection} insights={insights} />
 
       {questions && (
         <section aria-labelledby="questions-title" className="rounded-lg border border-border bg-card px-6 py-4" data-testid="prep-questions">

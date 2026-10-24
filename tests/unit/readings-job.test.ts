@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { runReadingsJob, type ReadingsJobDeps } from '@/lib/jobs/readings-job';
-import type { DailyReadings } from '@/lib/types';
+import type { DailyReadings, StudyLevel } from '@/lib/types';
 
 // 2026-10-21 12:00 Chicago (CDT) = 17:00 UTC
 const NOW = new Date('2026-10-21T17:00:00Z');
@@ -243,6 +243,57 @@ describe('runReadingsJob', () => {
     insights.write.mockClear();
     await runReadingsJob(noReflection);
     expect(insights.write).not.toHaveBeenCalled();
+  });
+
+  it('writes a study guide per date at the wanted level, and rewrites the coming week when the level changes', async () => {
+    const stored = new Map<string, StudyLevel>();
+    let level: StudyLevel = 'brief';
+    const study = {
+      level: vi.fn(() => level),
+      stored: vi.fn(async (d: string) => stored.get(d) ?? null),
+      write: vi.fn(async (_r: DailyReadings, l: StudyLevel) => ({ level: l, readings: [] })),
+      save: vi.fn(async (d: string, g: { level: StudyLevel }) => void stored.set(d, g.level)),
+    };
+    // Last week already has brief guides; they are not rewritten when the level changes.
+    stored.set('2026-10-20', 'brief');
+    const deps = setup({ study, hasReflection: vi.fn(async () => true) }, ['2026-10-20']);
+    await runReadingsJob(deps);
+    expect(study.save).toHaveBeenCalledTimes(8);
+    await runReadingsJob(deps);
+    expect(study.save).toHaveBeenCalledTimes(8);
+
+    level = 'full';
+    study.save.mockClear();
+    await runReadingsJob(deps);
+    expect(study.save).toHaveBeenCalledTimes(8);
+    expect(study.save).not.toHaveBeenCalledWith('2026-10-20', expect.anything());
+    expect(stored.get('2026-10-21')).toBe('full');
+  });
+
+  it('records a study guide failure without failing the readings', async () => {
+    const study = {
+      level: () => 'brief' as const,
+      stored: vi.fn(async () => null),
+      write: vi.fn(async () => { throw new Error('timeout'); }),
+      save: vi.fn(async () => {}),
+    };
+    const deps = setup({ study, hasReflection: vi.fn(async () => true) });
+    const res = await runReadingsJob(deps);
+    expect(res.failed).toEqual([]);
+    expect(deps.logRun).toHaveBeenCalledWith('readings', 'ok', expect.stringContaining('study 2026-10-21: timeout'));
+  });
+
+  it('writes the personal reflection for today and the coming Sunday only, when missing', async () => {
+    const written = new Set<string>(['2026-10-25']);
+    const personal = {
+      has: vi.fn(async (d: string) => written.has(d)),
+      write: vi.fn(async (r: DailyReadings) => void written.add(r.date)),
+    };
+    const deps = setup({ personal }, ['2026-10-20']);
+    await runReadingsJob(deps);
+    expect(personal.write).toHaveBeenCalledTimes(1);
+    expect(personal.write).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-10-21' }));
+    expect(personal.has).not.toHaveBeenCalledWith('2026-10-20');
   });
 
   it('starts no AI step once the time budget is spent, but still saves the readings', async () => {
