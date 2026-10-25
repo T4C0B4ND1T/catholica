@@ -50,7 +50,7 @@ export function PostureBadge({ initial }: { initial: MassPosture }) {
 
   const { label, Icon } = POSTURES[posture];
   return (
-    <div ref={badgeRef} className="sticky top-0 z-30 -mx-4 border-b border-border bg-background px-4 py-3">
+    <div ref={badgeRef} className="sticky top-[env(safe-area-inset-top)] z-30 -mx-4 border-b border-border bg-background px-4 py-3">
       <div className="flex items-center justify-center gap-3" data-testid="posture-badge">
         <Icon size={32} strokeWidth={1.5} className="text-accent-ink" aria-hidden="true" />
         <span className="font-display text-2xl leading-none">

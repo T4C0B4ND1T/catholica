@@ -31,11 +31,11 @@ export function CatechismLink({ paragraph }: { paragraph: number }) {
         CCC {paragraph}
       </button>
       {state.open && (
-        <blockquote className="mt-2 border-l-2 border-accent pl-3 text-sm">
+        <blockquote className="mt-2 border-l-2 border-accent pl-3 text-[length:calc(16px*var(--text-scale,1))] leading-[1.65]">
           {state.para ? (
             <>
               <p>{state.para.text}</p>
-              <p className="mt-1 text-muted-foreground">Catechism of the Catholic Church, {paragraph}</p>
+              <p className="mt-1 text-[0.875em] text-muted-foreground">Catechism of the Catholic Church, {paragraph}</p>
             </>
           ) : state.error ? (
             <p className="text-muted-foreground">Could not load the paragraph. Check your connection and try again.</p>

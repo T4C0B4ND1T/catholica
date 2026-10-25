@@ -115,6 +115,8 @@ body {
   font-size: calc(1rem * var(--text-scale, 1));
   line-height: 1.75;
   letter-spacing: 0.01em;
+  /* viewport-fit=cover: keep content clear of the notch / status bar. */
+  padding-top: env(safe-area-inset-top);
 }
 
 /* Paper-noise overlay, light mode only (--noise-opacity is 0 in dark). */
