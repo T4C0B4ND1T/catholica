@@ -37,14 +37,13 @@ async function main(): Promise<void> {
   const { logRun } = await import('../src/lib/db/jobs');
   const { sendAlert } = await import('../src/lib/jobs/alert');
   const { runBulletinJob } = await import('../src/lib/jobs/bulletin-job');
-  const { bulletinUrl, extractPdfText, fetchBulletinPdf } = await import('../src/lib/sources/bulletins');
+  const { extractPdfText, fetchBulletinPdf } = await import('../src/lib/sources/bulletins');
 
   const { added, failures } = await runBulletinJob({
     fetchPdf: async (d) => {
       console.log(`checking ${d}`);
       return fetchBulletinPdf(d);
     },
-    urlFor: bulletinUrl,
     extractText: extractPdfText,
     hasBulletin,
     saveBulletin: async (meta, bytes) => {

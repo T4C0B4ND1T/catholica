@@ -17,9 +17,8 @@ export interface BulletinMeta {
 }
 
 export interface BulletinJobDeps {
-  /** PDF bytes for a Sunday, null when not posted yet; throws on real failures. */
-  fetchPdf: (sunday: string) => Promise<Uint8Array | null>;
-  urlFor: (sunday: string) => string;
+  /** PDF bytes for a Sunday and where they came from, null when not posted yet; throws on real failures. */
+  fetchPdf: (sunday: string) => Promise<{ bytes: Uint8Array; sourceUrl: string } | null>;
   extractText: (bytes: Uint8Array) => Promise<{ text: string; pageCount: number }>;
   hasBulletin: (sunday: string) => Promise<boolean>;
   saveBulletin: (meta: BulletinMeta, bytes: Uint8Array) => Promise<void>;
@@ -97,9 +96,9 @@ export async function runBulletinJob(deps: BulletinJobDeps): Promise<BulletinJob
     }
     if (have) continue;
     probes++;
-    let bytes: Uint8Array | null;
+    let fetched: { bytes: Uint8Array; sourceUrl: string } | null;
     try {
-      bytes = await deps.fetchPdf(sunday);
+      fetched = await deps.fetchPdf(sunday);
     } catch (e) {
       fetchFailures++;
       notes.push(`${sunday}: ${errMessage(e)}`);
@@ -107,7 +106,8 @@ export async function runBulletinJob(deps: BulletinJobDeps): Promise<BulletinJob
     } finally {
       if (deps.pauseMs) await sleep(deps.pauseMs);
     }
-    if (!bytes) continue;
+    if (!fetched) continue;
+    const { bytes, sourceUrl } = fetched;
     let text: string | null = null;
     let pageCount = 0;
     try {
@@ -116,7 +116,7 @@ export async function runBulletinJob(deps: BulletinJobDeps): Promise<BulletinJob
       notes.push(`${sunday}: text extraction failed, saved without search text (${errMessage(e)})`);
     }
     try {
-      await deps.saveBulletin({ sundayDate: sunday, sourceUrl: deps.urlFor(sunday), pageCount, text }, bytes);
+      await deps.saveBulletin({ sundayDate: sunday, sourceUrl, pageCount, text }, bytes);
       added.push(sunday);
     } catch (e) {
       dbFailures++;
