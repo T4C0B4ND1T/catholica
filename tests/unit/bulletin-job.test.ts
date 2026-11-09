@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { candidateSundays, runBulletinJob, type BulletinJobDeps } from '@/lib/jobs/bulletin-job';
 
 const BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+const hit = (d: string) => ({ bytes: BYTES, sourceUrl: `u/${d}` });
 // 12:00 Chicago (CDT) = 17:00 UTC
 const MON = new Date('2026-10-19T17:00:00Z');
 const TUE = new Date('2026-10-20T17:00:00Z');
@@ -10,8 +11,7 @@ const SUN = new Date('2026-10-18T17:00:00Z');
 function setup(over: Partial<BulletinJobDeps> = {}, saved: string[] = []) {
   const db = new Set(saved);
   return {
-    fetchPdf: vi.fn(async () => BYTES as Uint8Array | null),
-    urlFor: (d: string) => `u/${d}`,
+    fetchPdf: vi.fn(async (d: string) => hit(d) as ReturnType<typeof hit> | null),
     extractText: vi.fn(async () => ({ text: 't', pageCount: 4 })),
     hasBulletin: vi.fn(async (d: string) => db.has(d)),
     saveBulletin: vi.fn(async (m: { sundayDate: string }) => void db.add(m.sundayDate)),
@@ -59,7 +59,7 @@ describe('runBulletinJob', () => {
       since: '2026-10-04',
       fetchPdf: vi.fn(async (d: string) => {
         if (d === '2026-10-11') throw new Error('boom');
-        return BYTES;
+        return hit(d);
       }),
     });
     const res = await runBulletinJob(deps);
@@ -144,7 +144,7 @@ describe('runBulletinJob', () => {
   });
 
   it('returns the failure count', async () => {
-    const deps = setup({ since: '2026-10-04', fetchPdf: vi.fn(async (d: string) => { if (d === '2026-10-11') throw new Error('x'); return BYTES; }) });
+    const deps = setup({ since: '2026-10-04', fetchPdf: vi.fn(async (d: string) => { if (d === '2026-10-11') throw new Error('x'); return hit(d); }) });
     expect((await runBulletinJob(deps)).failures).toBe(1);
   });
 
