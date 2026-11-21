@@ -19,6 +19,19 @@ export interface ReadingSection {
   title: string;
   citation: string;
   text: string;
+  /**
+   * Where each verse begins in `text`, in text order, found by lining the reading up with the cited verses of USCCB's
+   * Bible. Left out when they could not be found; the text is the same either way.
+   */
+  verses?: VerseMark[];
+}
+
+/** A verse number at a position in a reading's text. */
+export interface VerseMark {
+  /** Character offset in the section's `text` where the verse begins. */
+  at: number;
+  chapter: number;
+  verse: number;
 }
 
 export interface DailyReadings {

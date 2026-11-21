@@ -43,8 +43,10 @@ async function main(): Promise<void> {
   const id = require.resolve('server-only');
   require.cache[id] = { id, filename: id, loaded: true, exports: {}, children: [], paths: [] } as unknown as NodeJS.Module;
   const { fetchUsccb } = await import('../src/lib/sources/usccb');
+  const { addVerses } = await import('../src/lib/sources/bible');
   const { addDays } = await import('../src/lib/dates');
 
+  const chapters = new Map<string, Promise<Map<number, string>>>();
   let batch: unknown[] = [];
   const upload = async () => {
     if (!batch.length) return;
@@ -60,7 +62,9 @@ async function main(): Promise<void> {
 
   for (let date = from; date <= to; date = addDays(date, 1)) {
     try {
-      batch.push(await fetchUsccb(date, fetchText));
+      const day = await fetchUsccb(date, fetchText);
+      // Verse numbers come from USCCB's Bible pages, which load here but not on the site's servers.
+      batch.push({ ...day, sections: await addVerses(day.sections, fetchText, undefined, chapters) });
       console.log(date);
     } catch (e) {
       console.error(date, 'failed:', e instanceof Error ? e.message : e);

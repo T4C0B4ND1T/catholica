@@ -1,7 +1,8 @@
 import { addDays, formatDay, todayInChicago } from '@/lib/dates';
 import { comingSunday, liturgicalDay } from '@/lib/liturgical/calendar';
 import { defaultMass, massSections } from '@/lib/mass-options';
-import type { BulletinSummary, DailyReadings, ReadingStudy, ReflectionInsights, Season, StudyGuide } from '@/lib/types';
+import type { BulletinSummary, DailyReadings, ReadingStudy, ReflectionInsights, Season, StudyGuide, VerseMark } from '@/lib/types';
+import { verseRuns, withVerseLabels } from '@/lib/verses';
 
 export interface SundayEmailContent {
   sunday: string;
@@ -49,11 +50,17 @@ const SEASON_NAMES: Record<Season, string> = {
 const smallCaps = (t: string, color = MUTED) =>
   `<p style="margin:0;font-family:${SANS};font-size:12px;line-height:1.5;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:${color}">${esc(t)}</p>`;
 const aiNote = (t: string) => `<p style="margin:4px 0 14px;font-family:${SANS};font-size:13px;line-height:1.5;font-style:italic;color:${MUTED}">${esc(t)}</p>`;
-const paras = (s: string, font = BODY_SERIF, size = 17) =>
-  s
+const paras = (s: string, font = BODY_SERIF, size = 17, verses?: VerseMark[]) =>
+  verseRuns(s, verses)
+    .map((r) => (r.label ? verseSup(r.label) : '') + esc(r.text))
+    .join('')
     .split(/\n{2,}/)
-    .map((p) => `<p style="margin:0 0 12px;font-family:${font};font-size:${size}px;line-height:1.65;color:${INK}">${esc(p.trim()).replace(/\n/g, '<br>')}</p>`)
+    .map((p) => `<p style="margin:0 0 12px;font-family:${font};font-size:${size}px;line-height:1.65;color:${INK}">${p.trim().replace(/\n/g, '<br>')}</p>`)
     .join('');
+
+/** A verse number before its verse: small gold sans-serif superscript. */
+const verseSup = (label: string) =>
+  `<sup style="font-family:${SANS};font-size:10px;font-weight:600;line-height:0;color:${GOLD_INK};margin-right:2px">${esc(label)}</sup>`;
 
 /** One titled section of the card: a gold small-caps label over a rule, then its content. */
 function section(title: string, content: string): string {
@@ -121,7 +128,7 @@ export function buildSundayEmail(c: SundayEmailContent): Email {
   if (sections.length) {
     for (const s of sections) {
       const st = studyFor(s.index);
-      text.push(`${s.label.toUpperCase()} · ${s.section.citation}`, s.section.text, '', ...(st ? [...studyText(st), ''] : []));
+      text.push(`${s.label.toUpperCase()} · ${s.section.citation}`, withVerseLabels(s.section.text, s.section.verses), '', ...(st ? [...studyText(st), ''] : []));
     }
   } else text.push("The readings for this Sunday aren't saved yet.", '');
   if (c.reflection) text.push('SHORT HOMILY (written by AI, not Scripture or Church teaching)', c.reflection, '');
@@ -171,7 +178,7 @@ ${smallCaps('At a glance', GOLD_INK)}
             .map(
               (s, i) => `<p style="margin:${i ? '22px' : '0'} 0 2px;font-family:${SERIF};font-size:20px;line-height:1.3;color:${INK}">${esc(s.label)}</p>
 <p style="margin:0 0 10px;font-family:${SANS};font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${MUTED}">${esc(s.section.citation)}</p>
-${paras(s.section.text)}${studyFor(s.index) ? studyBox(studyFor(s.index)!) : ''}`,
+${paras(s.section.text, BODY_SERIF, 17, s.section.verses)}${studyFor(s.index) ? studyBox(studyFor(s.index)!) : ''}`,
             )
             .join('')
         : paras("The readings for this Sunday aren't saved yet. They arrive about a week ahead.", SANS, 16),
