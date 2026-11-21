@@ -68,6 +68,18 @@ describe('buildSundayEmail', () => {
     expect(e.html).toContain('Going deeper');
   });
 
+  it('numbers the verses of a reading that has them, in the HTML and the plain text', () => {
+    const text = 'You shall love the Lord <your> God.\nThe second is like it.';
+    const verses = [
+      { at: 0, chapter: 22, verse: 37 },
+      { at: text.indexOf('The second'), chapter: 22, verse: 39 },
+    ];
+    const gospel = { kind: 'gospel' as const, title: 'Gospel', citation: 'Matthew 22:37-39', text, verses };
+    const e = buildSundayEmail({ sunday: SUNDAY, readings: { ...readings, sections: [gospel] }, reflection: null, questions: null, bulletin: null, siteUrl: 'https://x.example/' });
+    expect(e.html).toMatch(/<sup[^>]*>22:37<\/sup>You shall love the Lord &lt;your&gt; God\.<br><sup[^>]*>39<\/sup>The second/);
+    expect(e.text).toContain('[22:37] You shall love the Lord <your> God.\n[39] The second is like it.');
+  });
+
   it('still builds when nothing is saved yet', () => {
     const e = buildSundayEmail({ sunday: SUNDAY, readings: null, reflection: null, questions: null, bulletin: null, siteUrl: 'https://x.test' });
     expect(e.subject).toBe('Sunday prep: This Sunday');

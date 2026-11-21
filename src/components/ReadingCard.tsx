@@ -2,6 +2,7 @@ import { BookmarkButton } from "@/components/BookmarkButton";
 import { SpeakButton } from "@/components/SpeakButton";
 import { StudyNotes } from "@/components/StudyNotes";
 import { Card } from "@/components/ui/Card";
+import { VerseText } from "@/components/VerseText";
 import { bookmarkKey, fullLabel, type MassSection } from "@/lib/mass-options";
 import type { ReadingKind, ReadingStudy } from "@/lib/types";
 
@@ -46,7 +47,9 @@ export function ReadingCard({
           <BookmarkButton date={date} sectionKey={bookmarkKey(item)} label={fullLabel(item)} legacyKind={legacyKind} />
         </div>
       </div>
-      <p className="mt-4 max-w-[34em] whitespace-pre-line text-[length:calc(19px*var(--text-scale,1))] leading-[1.75]">{section.text}</p>
+      <p className="mt-4 max-w-[34em] whitespace-pre-line text-[length:calc(19px*var(--text-scale,1))] leading-[1.75]">
+        <VerseText text={section.text} verses={section.verses} />
+      </p>
       {study && <StudyNotes study={study} />}
     </Card>
   );

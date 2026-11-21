@@ -1,6 +1,7 @@
 import { readingSlotFor, type MassDialogueLine, type MassStepData } from '@/data/order-of-mass';
 import type { DailyReadings } from '@/lib/types';
 import { BookmarkButton } from '@/components/BookmarkButton';
+import { VerseText } from '@/components/VerseText';
 import { bookmarkKey, fullLabel, sectionForKind } from '@/lib/mass-options';
 import type { StepPlan } from '@/lib/liturgical/mass-day';
 
@@ -99,7 +100,9 @@ export function MassStep({
               <BookmarkButton date={readings.date} sectionKey={bookmarkKey(item)} label={fullLabel(item)} legacyKind={slot} />
             )}
           </div>
-          <p className="mt-2 whitespace-pre-line leading-relaxed">{section.text}</p>
+          <p className="mt-2 whitespace-pre-line leading-relaxed">
+            <VerseText text={section.text} verses={section.verses} />
+          </p>
           <p className="mt-3 text-xs text-muted-foreground">
             NABRE ·{' '}
             {readings?.sourceUrl ? (
